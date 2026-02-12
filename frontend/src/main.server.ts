@@ -1,0 +1,14 @@
+import { enableProdMode } from '@angular/core';
+import { platformServer } from '@angular/platform-server';
+import { AppServerModule } from './app/app.server.module';
+import { environment } from './environments/environment';
+
+if (environment.production) {
+    enableProdMode();
+}
+
+export { AppServerModule };
+
+const bootstrap = () => platformServer().bootstrapModule(AppServerModule);
+
+export default bootstrap;

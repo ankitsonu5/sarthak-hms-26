@@ -1,0 +1,31 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: hms_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-your_password_here}
+      MYSQL_DATABASE: ${DB_NAME:-hospital_db}
+      MYSQL_USER: ${DB_USER:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-your_password_here}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: ["--default-authentication-plugin=mysql_native_password"]
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    container_name: hms_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: ${DB_USER:-root}
+      PMA_PASSWORD: ${DB_PASSWORD:-your_password_here}
+    ports:
+      - "8081:80"
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_data:
