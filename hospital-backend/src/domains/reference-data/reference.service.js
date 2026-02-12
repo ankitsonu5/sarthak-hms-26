@@ -10,7 +10,9 @@ exports.getAll = async () => {
         occupations,
         educationLevels,
         socioEcons,
-        relationships
+        relationships,
+        wards,
+        beds
     ] = await Promise.all([
         db.query('SELECT branch_id, branch_name FROM hospital_branch WHERE is_active = TRUE'),
         db.query('SELECT category_id, category_name FROM master_patient_category'),
@@ -19,7 +21,9 @@ exports.getAll = async () => {
         db.query('SELECT occupation_id, occupation_name FROM master_occupation'),
         db.query('SELECT education_level_id, level_name FROM master_education_level'),
         db.query('SELECT class_id, class_name FROM master_socio_economic_class'),
-        db.query('SELECT relationship_id, relationship_name FROM master_relationship')
+        db.query('SELECT relationship_id, relationship_name FROM master_relationship'),
+        db.query('SELECT ward_id, ward_name, ward_type FROM master_ward WHERE is_active = TRUE'),
+        db.query('SELECT bed_id, ward_id, bed_number, bed_status FROM master_bed')
     ]);
 
     return {
@@ -30,6 +34,8 @@ exports.getAll = async () => {
         occupations: occupations[0],
         education_levels: educationLevels[0],
         socio_economic_classes: socioEcons[0],
-        relationships: relationships[0]
+        relationships: relationships[0],
+        wards: wards[0],
+        beds: beds[0]
     };
 };

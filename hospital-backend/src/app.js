@@ -44,6 +44,15 @@ app.use('/api/patients', require('./domains/operations/patient-registration/pati
 // 3. OPD Operations
 app.use('/api/opd', require('./domains/operations/opd-visit/opd.routes'));
 
+// 4. IPD Operations
+app.use('/api/ipd', require('./domains/operations/ipd-admission/ipd.routes'));
+
+// 5. IPD Orders
+app.use('/api/ipd-orders', require('./domains/operations/ipd-orders/ipd_orders.routes'));
+
+// 6. IPD Billing
+app.use('/api/ipd-billing', require('./domains/operations/ipd-billing/billing.routes'));
+
 // Fallback error handler (in case a route calls next(err))
 // Note: many controllers self-handle errors. This is a safety net.
 // eslint-disable-next-line no-unused-vars
