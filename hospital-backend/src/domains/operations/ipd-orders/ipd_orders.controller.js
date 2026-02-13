@@ -33,3 +33,22 @@ exports.createOrder = async (req, res) => {
         });
     }
 };
+
+exports.getOrdersByAdmission = async (req, res) => {
+    try {
+        const result = await ipdOrdersService.getOrdersByAdmission(req.params.admissionId);
+        res.status(200).json({ success: true, count: result.length, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getOrderById = async (req, res) => {
+    try {
+        const result = await ipdOrdersService.getOrderById(req.params.id);
+        if (!result) return res.status(404).json({ success: false, message: 'Order not found' });
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

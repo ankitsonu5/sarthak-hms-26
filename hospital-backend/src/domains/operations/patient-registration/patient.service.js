@@ -103,3 +103,44 @@ exports.register = async (payload, userId) => {
         conn.release();
     }
 };
+// 6️⃣ List All Patients
+exports.getAll = async () => {
+    const [rows] = await db.query('SELECT * FROM patient_master ORDER BY created_at DESC');
+    return rows;
+};
+
+// 7️⃣ Get Patient by ID (Detailed)
+exports.getById = async (id) => {
+    const [rows] = await db.query('SELECT * FROM patient_master WHERE patient_id = ?', [id]);
+    if (rows.length === 0) return null;
+
+    const patient = rows[0];
+
+    // Fetch associated data
+    const [demographics] = await db.query('SELECT * FROM patient_demographics WHERE patient_id = ?', [id]);
+    const [address] = await db.query('SELECT * FROM patient_address WHERE patient_id = ?', [id]);
+
+    return {
+        ...patient,
+        demographics: demographics[0] || null,
+        address: address[0] || null
+    };
+};
+
+// 8️⃣ Update Patient
+exports.update = async (id, payload) => {
+    await db.query(
+        `UPDATE patient_master SET 
+            first_name = ?, last_name = ?, mobile_primary = ?, email = ?
+         WHERE patient_id = ?`,
+        [payload.first_name, payload.last_name, payload.mobile_primary, payload.email, id]
+    );
+    return { message: 'Patient updated successfully' };
+};
+
+// 9️⃣ Delete Patient
+exports.delete = async (id) => {
+    // In hospital systems, we usually don't delete. But for this "simple" request, we will.
+    await db.query('DELETE FROM patient_master WHERE patient_id = ?', [id]);
+    return { message: 'Patient deleted successfully' };
+};

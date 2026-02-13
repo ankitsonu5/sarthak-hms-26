@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS opd_visit_master (
 
     appointment_type ENUM(
         'Walk-In',
+        'Walk-In',
         'Pre-Booked',
         'Emergency'
     ) NOT NULL,
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS opd_visit_master (
     token_no INT NOT NULL,
     queue_type ENUM(
         'Normal',
+        'Regular',
         'VIP',
         'Emergency'
     ) DEFAULT 'Normal',

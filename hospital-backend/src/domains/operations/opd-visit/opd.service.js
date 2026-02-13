@@ -109,3 +109,19 @@ exports.createOPDVisit = async (payload, userId) => {
         conn.release();
     }
 };
+// 5️⃣ List All Visits
+exports.getAllVisits = async () => {
+    const [rows] = await db.query(`
+        SELECT v.*, p.first_name, p.last_name, p.uhid 
+        FROM opd_visit_master v
+        JOIN patient_master p ON v.patient_id = p.patient_id
+        ORDER BY v.created_at DESC
+    `);
+    return rows;
+};
+
+// 6️⃣ Get Visit by ID
+exports.getVisitById = async (id) => {
+    const [rows] = await db.query('SELECT * FROM opd_visit_master WHERE opd_visit_id = ?', [id]);
+    return rows[0] || null;
+};

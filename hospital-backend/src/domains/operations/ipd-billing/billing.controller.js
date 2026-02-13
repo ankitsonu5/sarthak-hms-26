@@ -42,3 +42,12 @@ exports.getBillDetails = async (req, res) => {
         res.status(404).json({ success: false, message: error.message });
     }
 };
+exports.getAllBills = async (req, res) => {
+    try {
+        const result = await billingService.getAllBills();
+        res.status(200).json({ success: true, count: result.length, data: result });
+    } catch (error) {
+        console.error('List Bills Error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

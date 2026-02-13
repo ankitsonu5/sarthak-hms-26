@@ -15,4 +15,15 @@ const pool = mysql.createPool({
     keepAliveInitialDelay: 0
 });
 
+// Test connection
+pool.getConnection()
+    .then(connection => {
+        console.log('✅ MySQL Connected Successfully to:', process.env.DB_NAME);
+        connection.release();
+    })
+    .catch(err => {
+        console.error('❌ MySQL Connection Failed!');
+        console.error('Error Details:', err.message);
+    });
+
 module.exports = pool;

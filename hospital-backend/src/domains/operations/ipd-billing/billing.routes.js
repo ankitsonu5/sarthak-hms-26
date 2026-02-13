@@ -11,7 +11,10 @@ router.post('/bill/add-item', controller.addBillItem);
 // POST /api/ipd-billing/bill/payment
 router.post('/bill/payment', controller.processPayment);
 
-// GET /api/ipd-billing/bill/:id
+// GET /api/ipd-billing/bill/list - Get all bills
+router.get('/bill/list', controller.getAllBills);
+
+// GET /api/ipd-billing/bill/:id - Get specific bill details
 router.get('/bill/:id', controller.getBillDetails);
 
 module.exports = router;

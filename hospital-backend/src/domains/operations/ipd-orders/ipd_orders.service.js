@@ -131,3 +131,36 @@ exports.createDoctorOrder = async (payload, userId) => {
         conn.release();
     }
 };
+// 3️⃣ Get Order List for Admission
+exports.getOrdersByAdmission = async (admissionId) => {
+    const [rows] = await db.query(`
+        SELECT om.*, doc.name as doctor_name
+        FROM ipd_order_master om
+        LEFT JOIN master_doctor doc ON om.doctor_id = doc.doctor_id
+        WHERE om.ipd_admission_id = ?
+        ORDER BY om.order_datetime DESC
+    `, [admissionId]);
+    return rows;
+};
+
+// 4️⃣ Get Order Detail with Items
+exports.getOrderById = async (orderId) => {
+    const [master] = await db.query('SELECT * FROM ipd_order_master WHERE order_master_id = ?', [orderId]);
+    if (!master.length) return null;
+
+    const [items] = await db.query(`
+        SELECT oi.*, 
+            mo.generic_name as drug_name, mo.dose, mo.frequency,
+            lo.lab_test_id, ro.radiology_test_id
+        FROM ipd_order_items oi
+        LEFT JOIN ipd_medication_orders mo ON oi.order_item_id = mo.order_item_id
+        LEFT JOIN ipd_lab_orders lo ON oi.order_item_id = lo.order_item_id
+        LEFT JOIN ipd_radiology_orders ro ON oi.order_item_id = ro.order_item_id
+        WHERE oi.order_master_id = ?
+    `, [orderId]);
+
+    return {
+        master: master[0],
+        items: items
+    };
+};

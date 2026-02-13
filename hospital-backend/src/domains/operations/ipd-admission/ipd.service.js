@@ -166,3 +166,22 @@ exports.createIPDAdmission = async (payload, userId) => {
         conn.release();
     }
 };
+// 6️⃣ List All Admissions
+exports.getAllAdmissions = async () => {
+    const [rows] = await db.query(`
+        SELECT a.*, p.first_name, p.last_name, p.uhid, w.ward_name, b.bed_number
+        FROM ipd_admission_master a
+        JOIN patient_master p ON a.patient_id = p.patient_id
+        LEFT JOIN ipd_bed_allocation ba ON a.ipd_admission_id = ba.ipd_admission_id
+        LEFT JOIN master_ward w ON ba.ward_id = w.ward_id
+        LEFT JOIN master_bed b ON ba.bed_id = b.bed_id
+        ORDER BY a.created_at DESC
+    `);
+    return rows;
+};
+
+// 7️⃣ Get Admission Details
+exports.getAdmissionById = async (id) => {
+    const [rows] = await db.query('SELECT * FROM ipd_admission_master WHERE ipd_admission_id = ?', [id]);
+    return rows[0] || null;
+};

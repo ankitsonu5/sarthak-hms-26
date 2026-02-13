@@ -103,3 +103,14 @@ exports.getBillDetails = async (billId) => {
         conn.release();
     }
 };
+// List all bills with admission and patient info
+exports.getAllBills = async () => {
+    const [rows] = await db.query(`
+        SELECT b.*, a.admission_no, p.uhid, p.first_name, p.last_name
+        FROM ipd_bill b
+        JOIN ipd_admission_master a ON b.admission_id = a.ipd_admission_id
+        JOIN patient_master p ON a.patient_id = p.patient_id
+        ORDER BY b.created_at DESC
+    `);
+    return rows;
+};
