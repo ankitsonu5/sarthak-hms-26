@@ -1,13 +1,6 @@
-// server.js
-// Role: HTTP Server, Port, Clustering
-// This file imports the express app and starts the server.
-
-// Load environment variables from .env (local dev)
-require('dotenv').config();
-
+const env = require('./config/env');
 const app = require('./app');
-const port = process.env.PORT || 3000;
 
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+app.listen(env.PORT, () => {
+    console.log(`[HMS] Server running on port ${env.PORT} (${env.NODE_ENV})`);
 });

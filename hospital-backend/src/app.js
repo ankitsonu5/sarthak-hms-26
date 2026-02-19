@@ -1,80 +1,67 @@
-// app.js
-// Role: Express Application, Middlewares, Routes configuration
-// This file initializes the express app and exports it.
-
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const pool = require('./config/db');
+const requestLogger = require('./core/middleware/requestLogger');
+const errorHandler = require('./core/middleware/errorHandler');
+const { authenticate } = require('./core/middleware/auth');
+
 const app = express();
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
+// ------------------------------------
+// Global Middleware Pipeline
+// ------------------------------------
+app.use(helmet());
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(requestLogger);
+app.use(authenticate);
 
-// Basic health endpoint for readiness/liveness probes
-app.get('/api', (_req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
-});
-
-// Explicit health alias
+// ------------------------------------
+// Health Probes
+// ------------------------------------
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime() });
+    res.json({ status: 'ok', uptime: process.uptime() });
 });
 
-// Database health
 app.get('/api/db/health', async (_req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT 1 AS ok');
-    return res.json({ status: 'ok', database: 'connected', result: rows[0]?.ok === 1 });
-  } catch (error) {
-    return res.status(503).json({ status: 'error', database: 'disconnected', error: error?.message || 'DB unreachable' });
-  }
+    try {
+        const [rows] = await pool.query('SELECT 1 AS ok');
+        return res.json({ status: 'ok', database: 'connected', result: rows[0]?.ok === 1 });
+    } catch (error) {
+        return res.status(503).json({ status: 'error', database: 'disconnected', error: error?.message });
+    }
 });
 
-// ==========================================
-// 🏥 HMS Domain Routes
-// ==========================================
+// ------------------------------------
+// API v1 Routes
+// ------------------------------------
+const v1 = '/api/v1';
 
-// 1. Reference Data (Dropdowns)
-app.use('/api/reference-data', require('./domains/reference-data/reference.routes'));
+// Master Data
+app.use(`${v1}/master`, require('./domains/master/master.routes'));
+app.use(`${v1}/master-deps`, require('./domains/master/patient_master_dependencies.routes'));
+app.use(`${v1}/reference-data`, require('./domains/reference-data/reference.routes'));
 
-// 2. Patient Registration
-app.use('/api/patients', require('./domains/operations/patient-registration/patient.routes'));
+// Clinical Domains
+app.use(`${v1}/patients`, require('./domains/patient/patient.routes'));
+app.use(`${v1}/opd`, require('./domains/opd/opd.routes'));
+app.use(`${v1}/ipd`, require('./domains/ipd/ipd.routes'));
+app.use(`${v1}/orders`, require('./domains/orders/orders.routes'));
+app.use(`${v1}/nursing`, require('./domains/nursing/nursing.routes'));
+app.use(`${v1}/billing`, require('./domains/billing/billing.routes'));
+app.use(`${v1}/insurance`, require('./domains/insurance/insurance.routes'));
 
-// 3. OPD Operations
-app.use('/api/opd', require('./domains/operations/opd-visit/opd.routes'));
-
-// 4. IPD Operations
-app.use('/api/ipd', require('./domains/operations/ipd-admission/ipd.routes'));
-
-// 5. IPD Orders
-app.use('/api/ipd-orders', require('./domains/operations/ipd-orders/ipd_orders.routes'));
-
-// 6. IPD Billing
-app.use('/api/ipd-billing', require('./domains/operations/ipd-billing/billing.routes'));
-
-// 7. IPD Discharge
-app.use('/api/ipd-discharge', require('./domains/operations/ipd-discharge/discharge.routes'));
-
-// 8. Nursing & Clinical Monitoring
-app.use('/api/nursing', require('./domains/operations/nursing/nursing.routes'));
-
-// 9. Doctor Order Management (CPOE)
-app.use('/api/doctor-orders', require('./domains/operations/doctor-orders/doctor_orders.routes'));
-
-// Fallback error handler (in case a route calls next(err))
-// Note: many controllers self-handle errors. This is a safety net.
-// eslint-disable-next-line no-unused-vars
-app.use((err, _req, res, _next) => {
-  const msg = err?.message || '';
-  if (
-    err?.code === 'ECONNREFUSED' ||
-    err?.fatal === true ||
-    /(ECONNREFUSED|PROTOCOL_CONNECTION_LOST|ER_ACCESS_DENIED|getaddrinfo ENOTFOUND|pool)/i.test(msg)
-  ) {
-    return res.status(503).json({ status: 'error', message: 'Database unavailable' });
-  }
-  return res.status(500).json({ status: 'error', message: msg || 'Internal Server Error' });
+// ------------------------------------
+// 404 Handler
+// ------------------------------------
+app.use((_req, res) => {
+    res.status(404).json({ success: false, message: 'Route not found' });
 });
+
+// ------------------------------------
+// Global Error Handler (must be last)
+// ------------------------------------
+app.use(errorHandler);
 
 module.exports = app;

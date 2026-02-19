@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS opd_visit_master (
 
     appointment_type ENUM(
         'Walk-In',
-        'Walk-In',
+        'Walk-in',
         'Pre-Booked',
         'Emergency'
     ) NOT NULL,
