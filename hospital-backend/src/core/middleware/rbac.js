@@ -1,36 +1,28 @@
 const { AppError } = require('../errors');
 
-const requireRole = (...allowedRoles) => (req, _res, next) => {
-    if (!req.user || !req.user.role) {
-        throw new AppError('Authentication required', 401);
-    }
+/**
+ * Use auth.authorize() for role-based access.
+ * This module kept for requirePermission (future permission-based RBAC).
+ */
+function requireRole(...allowedRoles) {
+    return (req, _res, next) => {
+        if (!req.user) throw new AppError('Authentication required', 401);
+        const userRole = String(req.user.role_id);
+        const userRoleName = String(req.user.role_name || '');
+        const allowed = new Set(allowedRoles.map(r => String(r)));
+        if (allowed.has(userRole) || allowed.has(userRoleName)) return next();
+        throw new AppError(`Access denied — requires: ${allowedRoles.join(' or ')}`, 403);
+    };
+}
 
-    if (!allowedRoles.includes(req.user.role)) {
-        throw new AppError(
-            `Access denied — requires role: ${allowedRoles.join(' or ')}`,
-            403
-        );
-    }
-
-    next();
-};
-
-const requirePermission = (...permissions) => (req, _res, next) => {
-    if (!req.user) {
-        throw new AppError('Authentication required', 401);
-    }
-
-    const userPermissions = req.user.permissions || [];
-    const hasAll = permissions.every(p => userPermissions.includes(p));
-
-    if (!hasAll) {
-        throw new AppError(
-            `Access denied — requires permission: ${permissions.join(', ')}`,
-            403
-        );
-    }
-
-    next();
-};
+function requirePermission(...permissions) {
+    return (req, _res, next) => {
+        if (!req.user) throw new AppError('Authentication required', 401);
+        const userPermissions = req.user.permissions || [];
+        const hasAll = permissions.every(p => userPermissions.includes(p));
+        if (!hasAll) throw new AppError(`Access denied — requires: ${permissions.join(', ')}`, 403);
+        next();
+    };
+}
 
 module.exports = { requireRole, requirePermission };

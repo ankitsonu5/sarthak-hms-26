@@ -1,1 +1,19 @@
-<router-outlet></router-outlet>
+<div class="min-h-screen bg-surface-muted">
+  <header class="bg-primary text-white shadow">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <h1 class="text-xl font-semibold">{{ title }}</h1>
+      <div class="flex gap-2">
+        <select
+          class="bg-transparent border border-white/30 rounded px-2 py-1 text-sm"
+          [value]="theme.getCurrentTheme()"
+          (change)="onThemeChange($any($event.target).value)"
+        >
+          <option *ngFor="let t of theme.getAvailableThemes()" [value]="t">{{ t }}</option>
+        </select>
+      </div>
+    </div>
+  </header>
+  <main class="container mx-auto px-4 py-6">
+    <router-outlet></router-outlet>
+  </main>
+</div>

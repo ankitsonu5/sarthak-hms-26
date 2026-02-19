@@ -15,10 +15,9 @@ app.use(helmet());
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(requestLogger);
-app.use(authenticate);
 
 // ------------------------------------
-// Health Probes
+// Health Probes (public)
 // ------------------------------------
 app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', uptime: process.uptime() });
@@ -34,9 +33,15 @@ app.get('/api/db/health', async (_req, res) => {
 });
 
 // ------------------------------------
-// API v1 Routes
+// Auth (public - no JWT required)
 // ------------------------------------
 const v1 = '/api/v1';
+app.use(`${v1}/auth`, require('./domains/auth/auth.routes'));
+
+// ------------------------------------
+// Protected Routes (JWT required)
+// ------------------------------------
+app.use(authenticate);
 
 // Master Data
 app.use(`${v1}/master`, require('./domains/master/master.routes'));

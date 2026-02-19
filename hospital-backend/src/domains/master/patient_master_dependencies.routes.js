@@ -1,15 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const masterController = require('./patient_master_dependencies.controller');
+const { authorize } = require('../../core/middleware/auth');
+const R = require('../../core/constants/roles');
 
-// GET all dropdown data
+const ADMIN = [R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
+
 router.get('/patient-registration-dependencies', masterController.getRegistrationMasters);
-
-// Specific POSTs
-router.post('/city', masterController.addCity);
-router.post('/referral-source', masterController.addReferralSource);
-
-// Generic DELETE for other masters: /api/master/:tableName/:id
-router.delete('/:tableName/:id', masterController.deleteGenericMaster);
+router.post('/city', authorize(...ADMIN), masterController.addCity);
+router.post('/referral-source', authorize(...ADMIN), masterController.addReferralSource);
+router.delete('/:tableName/:id', authorize(...ADMIN), masterController.deleteGenericMaster);
 
 module.exports = router;

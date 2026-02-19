@@ -3,25 +3,16 @@ const router = express.Router();
 const controller = require('./orders.controller');
 const validate = require('../../core/middleware/validate');
 const schema = require('./orders.validation');
+const { authorize } = require('../../core/middleware/auth');
+const R = require('../../core/constants/roles');
 
-// IPD Order System
-// POST /api/v1/orders/ipd/create
-router.post('/ipd/create', validate(schema.createIPDOrder), controller.createIPDOrder);
+const CLINICAL = [R.DOCTOR, R.NURSE, R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// GET /api/v1/orders/ipd/admission/:admissionId
-router.get('/ipd/admission/:admissionId', controller.getOrdersByAdmission);
-
-// GET /api/v1/orders/ipd/:id
-router.get('/ipd/:id', controller.getOrderById);
-
-// CPOE (Doctor Order Management)
-// POST /api/v1/orders/cpoe/create
-router.post('/cpoe/create', validate(schema.createCPOEOrder), controller.createCPOEOrder);
-
-// PUT /api/v1/orders/cpoe/sign/:id
-router.put('/cpoe/sign/:id', controller.signOrder);
-
-// GET /api/v1/orders/patient/:patientId
-router.get('/patient/:patientId', controller.getOrdersByPatient);
+router.post('/ipd/create', authorize(...CLINICAL), validate(schema.createIPDOrder), controller.createIPDOrder);
+router.get('/ipd/admission/:admissionId', authorize(...CLINICAL), controller.getOrdersByAdmission);
+router.get('/ipd/:id', authorize(...CLINICAL), controller.getOrderById);
+router.post('/cpoe/create', authorize(...CLINICAL), validate(schema.createCPOEOrder), controller.createCPOEOrder);
+router.put('/cpoe/sign/:id', authorize(...CLINICAL), controller.signOrder);
+router.get('/patient/:patientId', authorize(...CLINICAL), controller.getOrdersByPatient);
 
 module.exports = router;

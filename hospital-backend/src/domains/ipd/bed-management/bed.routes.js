@@ -1,17 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('./bed.controller');
+const { authorize } = require('../../../core/middleware/auth');
+const R = require('../../../core/constants/roles');
 
-// POST /api/v1/ipd/bed/allocate
-router.post('/allocate', controller.allocateBed);
+const CLINICAL_ADMIN = [R.DOCTOR, R.NURSE, R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// PUT /api/v1/ipd/bed/transfer
-router.put('/transfer', controller.transferBed);
-
-// GET /api/v1/ipd/bed/available
-router.get('/available', controller.getAvailableBeds);
-
-// GET /api/v1/ipd/bed/occupancy
-router.get('/occupancy', controller.getBedOccupancy);
+router.post('/allocate', authorize(...CLINICAL_ADMIN), controller.allocateBed);
+router.put('/transfer', authorize(...CLINICAL_ADMIN), controller.transferBed);
+router.get('/available', authorize(...CLINICAL_ADMIN), controller.getAvailableBeds);
+router.get('/occupancy', authorize(...CLINICAL_ADMIN), controller.getBedOccupancy);
 
 module.exports = router;

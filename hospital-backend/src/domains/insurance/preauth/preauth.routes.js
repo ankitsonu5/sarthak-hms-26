@@ -3,20 +3,15 @@ const router = express.Router();
 const controller = require('./preauth.controller');
 const validate = require('../../../core/middleware/validate');
 const schema = require('./preauth.validation');
+const { authorize } = require('../../../core/middleware/auth');
+const R = require('../../../core/constants/roles');
 
-// POST /api/v1/insurance/preauth
-router.post('/', validate(schema.create), controller.create);
+const INS = [R.INSURANCE, R.BILLING, R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// PATCH /api/v1/insurance/preauth/:id/status
-router.patch('/:id/status', validate(schema.updateStatus), controller.updateStatus);
-
-// GET /api/v1/insurance/preauth
-router.get('/', controller.getAll);
-
-// GET /api/v1/insurance/preauth/:id
-router.get('/:id', controller.getById);
-
-// GET /api/v1/insurance/preauth/admission/:admissionId
-router.get('/admission/:admissionId', controller.getByAdmission);
+router.post('/', authorize(...INS), validate(schema.create), controller.create);
+router.patch('/:id/status', authorize(...INS), validate(schema.updateStatus), controller.updateStatus);
+router.get('/', authorize(...INS), controller.getAll);
+router.get('/admission/:admissionId', authorize(...INS), controller.getByAdmission);
+router.get('/:id', authorize(...INS), controller.getById);
 
 module.exports = router;

@@ -1,1 +1,67 @@
-/* Global Styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   HMS Theme System - Multi-Hospital Support
+   Theme changes via data-theme on <html>
+   ============================================ */
+
+:root,
+[data-theme="default"] {
+  --hms-primary: #0ea5e9;
+  --hms-primary-dark: #0284c7;
+  --hms-primary-light: #38bdf8;
+  --hms-secondary: #64748b;
+  --hms-accent: #06b6d4;
+  --hms-surface: #ffffff;
+  --hms-surface-muted: #f8fafc;
+  --hms-text: #0f172a;
+  --hms-text-muted: #64748b;
+}
+
+[data-theme="apollo"] {
+  --hms-primary: #0d9488;
+  --hms-primary-dark: #0f766e;
+  --hms-primary-light: #2dd4bf;
+  --hms-secondary: #475569;
+  --hms-accent: #14b8a6;
+  --hms-surface: #ffffff;
+  --hms-surface-muted: #f1f5f9;
+}
+
+[data-theme="fortis"] {
+  --hms-primary: #7c3aed;
+  --hms-primary-dark: #6d28d9;
+  --hms-primary-light: #a78bfa;
+  --hms-secondary: #4b5563;
+  --hms-accent: #8b5cf6;
+  --hms-surface: #ffffff;
+  --hms-surface-muted: #faf5ff;
+}
+
+[data-theme="max"] {
+  --hms-primary: #dc2626;
+  --hms-primary-dark: #b91c1c;
+  --hms-primary-light: #f87171;
+  --hms-secondary: #57534e;
+  --hms-accent: #ef4444;
+  --hms-surface: #ffffff;
+  --hms-surface-muted: #fef2f2;
+}
+
+[data-theme="green"] {
+  --hms-primary: #16a34a;
+  --hms-primary-dark: #15803d;
+  --hms-primary-light: #22c55e;
+  --hms-secondary: #4b5563;
+  --hms-accent: #10b981;
+}
+
+/* Base styles */
+body {
+  background-color: var(--hms-surface-muted);
+  color: var(--hms-text, #0f172a);
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

@@ -1,41 +1,47 @@
+const BaseController = require('../../../core/base/BaseController');
 const claimsService = require('./claims.service');
-const asyncHandler = require('../../../core/middleware/asyncHandler');
-const response = require('../../../core/helpers/response');
-const { NotFoundError } = require('../../../core/errors');
 
-exports.submit = asyncHandler(async (req, res) => {
+const ctrl = new BaseController();
+
+exports.submit = ctrl.handle(async (req, res) => {
     const result = await claimsService.submitClaim(req.body, req.user.id);
-    response.created(res, result, 'Claim submitted successfully');
+    ctrl.created(res, result, 'Claim submitted');
 });
 
-exports.updateStatus = asyncHandler(async (req, res) => {
-    const result = await claimsService.updateClaimStatus(req.params.id, req.body, req.user.id);
-    if (!result) throw new NotFoundError('Claim', req.params.id);
-    response.success(res, result, 'Claim status updated');
+exports.updateStatus = ctrl.handle(async (req, res) => {
+    const ip = req.ip || req.connection?.remoteAddress || req.headers?.['x-forwarded-for']?.split(',')[0];
+    const result = await claimsService.updateClaimStatus(req.params.id, req.body, req.user.id, ip);
+    if (!result) ctrl.notFound('Claim', req.params.id);
+    ctrl.ok(res, result, 'Status updated');
 });
 
-exports.addRejection = asyncHandler(async (req, res) => {
+exports.addRejection = ctrl.handle(async (req, res) => {
     const result = await claimsService.addRejection(req.params.id, req.body);
-    response.success(res, result, 'Rejection reason recorded');
+    ctrl.ok(res, result, 'Rejection recorded');
 });
 
-exports.getById = asyncHandler(async (req, res) => {
+exports.getById = ctrl.handle(async (req, res) => {
     const result = await claimsService.getClaimById(req.params.id);
-    if (!result) throw new NotFoundError('Claim', req.params.id);
-    response.success(res, result);
+    if (!result) ctrl.notFound('Claim', req.params.id);
+    ctrl.ok(res, result);
 });
 
-exports.getByAdmission = asyncHandler(async (req, res) => {
+exports.getByAdmission = ctrl.handle(async (req, res) => {
     const result = await claimsService.getClaimsByAdmission(req.params.admissionId);
-    response.success(res, result);
+    ctrl.ok(res, result);
 });
 
-exports.getAll = asyncHandler(async (req, res) => {
+exports.getAll = ctrl.handle(async (req, res) => {
     const result = await claimsService.getAllClaims();
-    response.success(res, result);
+    ctrl.ok(res, result);
 });
 
-exports.getTimeline = asyncHandler(async (req, res) => {
+exports.getTimeline = ctrl.handle(async (req, res) => {
     const result = await claimsService.getClaimTimeline(req.params.id);
-    response.success(res, result);
+    ctrl.ok(res, result);
+});
+
+exports.getAgingSummary = ctrl.handle(async (req, res) => {
+    const result = await claimsService.getAgingSummary();
+    ctrl.ok(res, result);
 });

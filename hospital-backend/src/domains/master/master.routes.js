@@ -1,21 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const masterController = require('./master.controller');
+const { authorize } = require('../../core/middleware/auth');
+const R = require('../../core/constants/roles');
 
-/**
- * MASTER DATA MANAGEMENT ROUTES
- * Base Path: /api/master
- */
+const ADMIN = [R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// Special: Fetch all masters for Patient Registration (single call)
 router.get('/registration-dependencies', masterController.getRegistrationMasters);
-
-// Generic CRUD for all master tables
-// Example: /api/master/master_gender
-router.get('/:tableName', masterController.getAll);           // List All
-router.get('/:tableName/:id', masterController.getById);      // Single Record
-router.post('/:tableName', masterController.create);          // Create (Object or Array)
-router.put('/:tableName/:id', masterController.update);       // Update
-router.delete('/:tableName/:id', masterController.delete);    // Delete
+router.get('/:tableName', masterController.getAll);
+router.get('/:tableName/:id', masterController.getById);
+router.post('/:tableName', authorize(...ADMIN), masterController.create);
+router.put('/:tableName/:id', authorize(...ADMIN), masterController.update);
+router.delete('/:tableName/:id', authorize(...ADMIN), masterController.delete);
 
 module.exports = router;

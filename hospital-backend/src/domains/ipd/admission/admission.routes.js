@@ -3,14 +3,13 @@ const router = express.Router();
 const controller = require('./admission.controller');
 const validate = require('../../../core/middleware/validate');
 const schema = require('./admission.validation');
+const { authorize } = require('../../../core/middleware/auth');
+const R = require('../../../core/constants/roles');
 
-// POST /api/v1/ipd/admission/create
-router.post('/create', validate(schema.createAdmission), controller.createIPDAdmission);
+const CLINICAL_ADMIN = [R.DOCTOR, R.NURSE, R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// GET /api/v1/ipd/admission/list
-router.get('/list', controller.getAllAdmissions);
-
-// GET /api/v1/ipd/admission/:id
-router.get('/:id', controller.getAdmissionById);
+router.post('/create', authorize(...CLINICAL_ADMIN), validate(schema.createAdmission), controller.createIPDAdmission);
+router.get('/list', authorize(...CLINICAL_ADMIN), controller.getAllAdmissions);
+router.get('/:id', authorize(...CLINICAL_ADMIN), controller.getAdmissionById);
 
 module.exports = router;

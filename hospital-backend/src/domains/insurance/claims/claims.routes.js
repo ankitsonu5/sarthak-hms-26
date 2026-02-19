@@ -3,26 +3,18 @@ const router = express.Router();
 const controller = require('./claims.controller');
 const validate = require('../../../core/middleware/validate');
 const schema = require('./claims.validation');
+const { authorize } = require('../../../core/middleware/auth');
+const R = require('../../../core/constants/roles');
 
-// POST /api/v1/insurance/claims
-router.post('/', validate(schema.submit), controller.submit);
+const INS = [R.INSURANCE, R.BILLING, R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// PATCH /api/v1/insurance/claims/:id/status
-router.patch('/:id/status', validate(schema.updateStatus), controller.updateStatus);
-
-// POST /api/v1/insurance/claims/:id/rejection
-router.post('/:id/rejection', validate(schema.addRejection), controller.addRejection);
-
-// GET /api/v1/insurance/claims
-router.get('/', controller.getAll);
-
-// GET /api/v1/insurance/claims/:id
-router.get('/:id', controller.getById);
-
-// GET /api/v1/insurance/claims/:id/timeline
-router.get('/:id/timeline', controller.getTimeline);
-
-// GET /api/v1/insurance/claims/admission/:admissionId
-router.get('/admission/:admissionId', controller.getByAdmission);
+router.post('/', authorize(...INS), validate(schema.submit), controller.submit);
+router.patch('/:id/status', authorize(...INS), validate(schema.updateStatus), controller.updateStatus);
+router.post('/:id/rejection', authorize(...INS), validate(schema.addRejection), controller.addRejection);
+router.get('/', authorize(...INS), controller.getAll);
+router.get('/aging-summary', authorize(...INS), controller.getAgingSummary);
+router.get('/admission/:admissionId', authorize(...INS), controller.getByAdmission);
+router.get('/:id/timeline', authorize(...INS), controller.getTimeline);
+router.get('/:id', authorize(...INS), controller.getById);
 
 module.exports = router;

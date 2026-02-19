@@ -3,14 +3,13 @@ const router = express.Router();
 const controller = require('./opd.controller');
 const validate = require('../../core/middleware/validate');
 const schema = require('./opd.validation');
+const { authorize } = require('../../core/middleware/auth');
+const R = require('../../core/constants/roles');
 
-// POST /api/v1/opd/visit/create
-router.post('/visit/create', validate(schema.createVisit), controller.createVisit);
+const CLINICAL_ADMIN = [R.DOCTOR, R.NURSE, R.SUPER_ADMIN, R.HOSPITAL_ADMIN];
 
-// GET /api/v1/opd/visit/list
-router.get('/visit/list', controller.getAllVisits);
-
-// GET /api/v1/opd/visit/:id
-router.get('/visit/:id', controller.getVisitById);
+router.post('/visit/create', authorize(...CLINICAL_ADMIN), validate(schema.createVisit), controller.createVisit);
+router.get('/visit/list', authorize(...CLINICAL_ADMIN), controller.getAllVisits);
+router.get('/visit/:id', authorize(...CLINICAL_ADMIN), controller.getVisitById);
 
 module.exports = router;
