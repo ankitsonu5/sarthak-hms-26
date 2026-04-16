@@ -1,31 +1,29 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: hms_mysql
+  postgres:
+    image: postgres:15
+    container_name: hms_postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-your_password_here}
-      MYSQL_DATABASE: ${DB_NAME:-hospital_db}
-      MYSQL_USER: ${DB_USER:-root}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-your_password_here}
+      POSTGRES_DB: ${DB_NAME:-hospital_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-your_password}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
-    command: ["--default-authentication-plugin=mysql_native_password"]
+      - postgres_data:/var/lib/postgresql/data
 
-  phpmyadmin:
-    image: phpmyadmin:5
-    container_name: hms_phpmyadmin
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: hms_pgadmin
     restart: unless-stopped
     environment:
-      PMA_HOST: mysql
-      PMA_USER: ${DB_USER:-root}
-      PMA_PASSWORD: ${DB_PASSWORD:-your_password_here}
+      PGADMIN_DEFAULT_EMAIL: admin@hms.com
+      PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "8081:80"
     depends_on:
-      - mysql
+      - postgres
 
 volumes:
-  mysql_data:
+  postgres_data:
+

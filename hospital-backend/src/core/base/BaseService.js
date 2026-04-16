@@ -1,33 +1,52 @@
-const db = require('../../config/db');
+const { prisma } = require('../../config/db');
 
 class BaseService {
-    constructor(tableName, pk = 'id') {
-        this.table = tableName;
+    constructor(modelName, pk = 'id') {
+        this.modelName = modelName;
         this.pk = pk;
     }
 
-    conn() {
-        return db.getConnection();
+    get model() {
+        return prisma[this.modelName];
     }
 
     async tx(fn) {
-        const conn = await this.conn();
-        try {
-            await conn.beginTransaction();
-            const out = await fn(conn);
-            await conn.commit();
-            return out;
-        } catch (e) {
-            await conn.rollback();
-            throw e;
-        } finally {
-            conn.release();
-        }
+        return prisma.$transaction(fn);
     }
 
-    async find(id) {
-        const [r] = await db.query(`SELECT * FROM ${this.table} WHERE ${this.pk} = ?`, [id]);
-        return r[0] || null;
+    async findById(id) {
+        if (!id) return null;
+        return this.model.findUnique({
+            where: { [this.pk]: BigInt(id) }
+        });
+    }
+
+    async findAll(params = {}) {
+        return this.model.findMany(params);
+    }
+
+    async create(data) {
+        return this.model.create({ data });
+    }
+
+    async update(id, data) {
+        return this.model.update({
+            where: { [this.pk]: BigInt(id) },
+            data
+        });
+    }
+
+    async delete(id) {
+        return this.model.update({
+            where: { [this.pk]: BigInt(id) },
+            data: { is_active: false }
+        });
+    }
+
+    async hardDelete(id) {
+        return this.model.delete({
+            where: { [this.pk]: BigInt(id) }
+        });
     }
 }
 

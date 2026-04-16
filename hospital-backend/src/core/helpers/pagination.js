@@ -6,9 +6,11 @@ const parsePagination = (query) => {
     return { page, limit, offset };
 };
 
-const buildPaginationClause = (query) => {
-    const { limit, offset } = parsePagination(query);
-    return { sql: 'LIMIT ? OFFSET ?', params: [limit, offset] };
-};
+const buildPaginationMeta = (total, page, limit) => ({
+    total,
+    page,
+    limit,
+    pages: Math.ceil(total / limit)
+});
 
-module.exports = { parsePagination, buildPaginationClause };
+module.exports = { parsePagination, buildPaginationMeta };

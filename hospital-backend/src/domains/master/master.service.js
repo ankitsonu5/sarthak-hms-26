@@ -1,111 +1,79 @@
-const db = require('../../config/db');
+const { prisma } = require('../../config/db');
 
-const ALLOWED_TABLES = [
-    'master_gender', 'master_nationality', 'master_religion',
-    'master_id_proof_type', 'master_state', 'master_district',
-    'master_city', 'master_pincode', 'master_language',
-    'master_title', 'master_referral_source', 'master_death_cause',
-    'master_education_level', 'master_marital_status', 'master_occupation',
-    'master_patient_category', 'master_relationship', 'master_blood_group',
-    'master_socio_economic_class',
-    'master_ward', 'master_bed',
-    'master_department', 'master_doctor', 'master_doctor_schedule',
-    'master_visit_type', 'master_appointment_type', 'master_queue_type',
-    'master_visit_reason', 'master_encounter_status', 'master_opd_room',
-    'master_payment_mode', 'master_payment_status',
-    'master_insurance_company', 'master_tpa',
-    'master_admission_type', 'master_admission_status',
-    'master_risk_category', 'master_ward_type',
-    'master_bed_status', 'master_bed_type',
-    'master_authorization_status', 'master_billing_type',
-    'master_consent_type', 'master_icd10',
-    'master_order_category', 'master_order_type',
-    'master_order_priority', 'master_order_status',
-    'master_frequency', 'master_route', 'master_dose_unit',
-    'master_result_type', 'master_specimen_type',
-    'master_order_cancel_reason', 'master_order_approval_role',
-    'master_service',
-    'master_preauth_status', 'master_claim_status',
-    'master_claim_document_type', 'master_claim_rejection_reason',
-    'master_escalation_role'
-];
+/**
+ * @desc Enterprise-grade Master Data Service
+ */
+class MasterService {
 
-const PK_OVERRIDES = {
-    'master_patient_category': 'category_id',
-    'master_socio_economic_class': 'class_id',
-    'master_doctor_schedule': 'schedule_id',
-    'master_order_cancel_reason': 'cancel_reason_id',
-    'master_order_approval_role': 'approval_role_id',
-    'master_claim_document_type': 'document_type_id',
-    'master_claim_rejection_reason': 'rejection_reason_id',
-    'master_escalation_role': 'escalation_role_id'
-};
+    static ALLOWED_TABLES = [
+        'master_roles', 'master_patient_category', 'master_ward', 'master_bed',
+        'master_gender', 'master_nationality', 'master_religion',
+        'master_id_proof_type', 'master_state', 'master_district',
+        'master_city', 'master_pincode', 'master_language',
+        'master_title', 'master_referral_source'
+    ];
 
-const getPkName = (t) => PK_OVERRIDES[t] || t.replace('master_', '') + '_id';
-
-const assertAllowed = (tableName) => {
-    if (!ALLOWED_TABLES.includes(tableName)) {
-        throw new Error(`Table ${tableName} is not allowed`);
-    }
-};
-
-exports.getAll = async (tableName) => {
-    assertAllowed(tableName);
-    const [rows] = await db.query(`SELECT * FROM ${tableName} WHERE is_active = TRUE`);
-    return rows;
-};
-
-exports.getById = async (tableName, id) => {
-    assertAllowed(tableName);
-    const pk = getPkName(tableName);
-    const [rows] = await db.query(`SELECT * FROM ${tableName} WHERE ${pk} = ?`, [id]);
-    return rows[0] || null;
-};
-
-exports.create = async (tableName, body) => {
-    assertAllowed(tableName);
-    const pk = getPkName(tableName);
-    const keys = Object.keys(body).filter(k => k !== pk);
-    const cols = keys.join(', ');
-    const placeholders = keys.map(() => '?').join(', ');
-    const [r] = await db.query(
-        `INSERT INTO ${tableName} (${cols}) VALUES (${placeholders})`,
-        keys.map(k => body[k])
-    );
-    const [row] = await db.query(`SELECT * FROM ${tableName} WHERE ${pk} = ?`, [r.insertId]);
-    return row[0];
-};
-
-exports.update = async (tableName, id, body) => {
-    assertAllowed(tableName);
-    const pk = getPkName(tableName);
-    const keys = Object.keys(body).filter(k => k !== pk);
-    const setClause = keys.map(k => `${k} = ?`).join(', ');
-    await db.query(
-        `UPDATE ${tableName} SET ${setClause} WHERE ${pk} = ?`,
-        [...keys.map(k => body[k]), id]
-    );
-    const [row] = await db.query(`SELECT * FROM ${tableName} WHERE ${pk} = ?`, [id]);
-    return row[0];
-};
-
-exports.delete = async (tableName, id) => {
-    assertAllowed(tableName);
-    const pk = getPkName(tableName);
-    await db.query(`UPDATE ${tableName} SET is_active = FALSE WHERE ${pk} = ?`, [id]);
-    const [row] = await db.query(`SELECT * FROM ${tableName} WHERE ${pk} = ?`, [id]);
-    return row[0];
-};
-
-exports.getRegistrationMasters = async () => {
-    const [results] = await db.query('CALL sp_get_patient_registration_masters()');
-    return {
-        genders: results[0] || [],
-        titles: results[1] || [],
-        nationalities: results[2] || [],
-        religions: results[3] || [],
-        idProofTypes: results[4] || [],
-        referralSources: results[5] || [],
-        states: results[6] || []
+    static PK_MAP = {
+        'master_roles': 'role_id',
+        'master_patient_category': 'category_id',
+        'master_ward': 'ward_id',
+        'master_bed': 'bed_id'
     };
-};
+
+    static getPk(tableName) {
+        return this.PK_MAP[tableName] || tableName.replace('master_', '') + '_id';
+    }
+
+    static async getAll(tableName) {
+        if (!this.ALLOWED_TABLES.includes(tableName)) throw new Error("Invalid Master Table");
+        return prisma.$queryRawUnsafe(`SELECT * FROM ${tableName} WHERE is_active = TRUE`);
+    }
+
+    static async getById(tableName, id) {
+        const pk = this.getPk(tableName);
+        const result = await prisma.$queryRawUnsafe(
+            `SELECT * FROM ${tableName} WHERE ${pk} = $1`,
+            BigInt(id)
+        );
+        return result[0] || null;
+    }
+
+    static async create(tableName, data) {
+        const keys = Object.keys(data);
+        const cols = keys.join(', ');
+        const vals = keys.map((_, i) => `$${i + 1}`).join(', ');
+
+        const query = `INSERT INTO ${tableName} (${cols}) VALUES (${vals}) RETURNING *`;
+        const result = await prisma.$queryRawUnsafe(query, ...Object.values(data));
+        return result[0];
+    }
+
+    static async update(tableName, id, data) {
+        const pk = this.getPk(tableName);
+        const keys = Object.keys(data);
+        const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+
+        const query = `UPDATE ${tableName} SET ${setClause} WHERE ${pk} = $${keys.length + 1} RETURNING *`;
+        const result = await prisma.$queryRawUnsafe(query, ...Object.values(data), BigInt(id));
+        return result[0];
+    }
+
+    /**
+     * @desc Fetching multiple masters for dropdowns (Registration)
+     */
+    static async getRegistrationMasters() {
+        // In PostgreSQL, we avoid Stored Procedures where possible for dynamic data
+        const [genders, titles, nationalities, religions, idTypes, states] = await Promise.all([
+            this.getAll('master_gender'),
+            this.getAll('master_title'),
+            this.getAll('master_nationality'),
+            this.getAll('master_religion'),
+            this.getAll('master_id_proof_type'),
+            this.getAll('master_state')
+        ]);
+
+        return { genders, titles, nationalities, religions, idTypes, states };
+    }
+}
+
+module.exports = MasterService;

@@ -1,101 +1,117 @@
-const db = require('../../../config/db');
+const { prisma } = require('../../../config/db');
 
 exports.createDraftDischarge = async (payload, userId) => {
-    const conn = await db.getConnection();
-    try {
-        await conn.beginTransaction();
+    return prisma.$transaction(async (tx) => {
+        // 1️⃣ Generate Discharge Number
+        const year = new Date().getFullYear();
+        const count = await tx.ipdDischarge.count();
+        const dischargeNumber = `DIS-${year}-${(count + 1).toString().padStart(6, '0')}`;
 
-        const [count] = await conn.query('SELECT COUNT(*) as c FROM ipd_discharges WHERE YEAR(created_at) = YEAR(CURDATE())');
-        const dischargeNumber = `DIS-${new Date().getFullYear()}-${String(count[0].c + 1).padStart(6, '0')}`;
-
-        const [result] = await conn.query(
-            `INSERT INTO ipd_discharges (
-                admission_id, patient_id, discharge_number, discharge_type, discharge_date,
-                condition_at_discharge, discharge_notes, prepared_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                payload.admission_id, payload.patient_id, dischargeNumber, payload.discharge_type,
-                payload.discharge_date, payload.condition_at_discharge, payload.discharge_notes, userId
-            ]
-        );
-
-        const dischargeId = result.insertId;
-
-        if (payload.diagnosis && payload.diagnosis.length) {
-            for (const d of payload.diagnosis) {
-                await conn.query(
-                    `INSERT INTO ipd_discharge_diagnosis (discharge_id, diagnosis_type, icd_code, diagnosis_name, remarks) VALUES (?, ?, ?, ?, ?)`,
-                    [dischargeId, d.type, d.icd_code, d.name, d.remarks]
-                );
+        // 2️⃣ Create Draft Discharge with Nested Relations
+        const discharge = await tx.ipdDischarge.create({
+            data: {
+                admission_id: BigInt(payload.admission_id),
+                patient_id: BigInt(payload.patient_id),
+                discharge_number: dischargeNumber,
+                discharge_type: payload.discharge_type,
+                discharge_date: new Date(payload.discharge_date),
+                condition_at_discharge: payload.condition_at_discharge || null,
+                discharge_notes: payload.discharge_notes || null,
+                discharge_summary: payload.discharge_summary || null,
+                prepared_by: BigInt(userId),
+                diagnosis: payload.diagnosis ? {
+                    create: payload.diagnosis.map(d => ({
+                        diagnosis_type: d.type,
+                        icd_code: d.icd_code,
+                        diagnosis_name: d.name,
+                        remarks: d.remarks
+                    }))
+                } : undefined,
+                medications: payload.medications ? {
+                    create: payload.medications.map(m => ({
+                        medicine_name: m.name,
+                        dosage: m.dosage,
+                        frequency: m.frequency,
+                        duration: m.duration,
+                        route: m.route,
+                        instructions: m.instructions
+                    }))
+                } : undefined,
+                followups: payload.followup ? {
+                    create: {
+                        followup_date: new Date(payload.followup.date),
+                        instructions: payload.followup.instructions
+                    }
+                } : undefined
             }
-        }
+        });
 
-        if (payload.medications && payload.medications.length) {
-            for (const m of payload.medications) {
-                await conn.query(
-                    `INSERT INTO ipd_discharge_medications (discharge_id, medicine_name, dosage, frequency, duration, route, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [dischargeId, m.name, m.dosage, m.frequency, m.duration, m.route, m.instructions]
-                );
-            }
-        }
-
-        if (payload.followup) {
-            await conn.query(
-                `INSERT INTO ipd_discharge_followups (discharge_id, followup_date, instructions) VALUES (?, ?, ?)`,
-                [dischargeId, payload.followup.date, payload.followup.instructions]
-            );
-        }
-
-        await conn.commit();
-        return { discharge_id: dischargeId, discharge_number: dischargeNumber };
-
-    } catch (err) {
-        await conn.rollback();
-        throw err;
-    } finally {
-        conn.release();
-    }
+        return { discharge_id: discharge.discharge_id, discharge_number: dischargeNumber };
+    });
 };
 
 exports.finalizeDischarge = async (dischargeId, userId) => {
-    const conn = await db.getConnection();
-    try {
-        await conn.beginTransaction();
+    return prisma.$transaction(async (tx) => {
+        // 1️⃣ Update Discharge Status
+        const discharge = await tx.ipdDischarge.update({
+            where: { discharge_id: BigInt(dischargeId) },
+            data: {
+                discharge_status: 'FINALIZED',
+                finalized_at: new Date(),
+                approved_by: BigInt(userId)
+            },
+            include: { admission: true }
+        });
 
-        await conn.query(
-            `UPDATE ipd_discharges SET discharge_status = 'FINALIZED', finalized_at = NOW(), approved_by = ? WHERE discharge_id = ?`,
-            [userId, dischargeId]
-        );
+        const admissionId = discharge.admission_id;
 
-        const [discharge] = await conn.query('SELECT admission_id FROM ipd_discharges WHERE discharge_id = ?', [dischargeId]);
-        const admissionId = discharge[0].admission_id;
+        // 2️⃣ Update Admission Master
+        await tx.ipdAdmissionMaster.update({
+            where: { ipd_admission_id: admissionId },
+            data: {
+                admission_status: 'Discharged',
+                discharge_date: new Date()
+            }
+        });
 
-        await conn.query(`UPDATE ipd_admission_master SET admission_status = 'Discharged', discharge_datetime = NOW() WHERE ipd_admission_id = ?`, [admissionId]);
+        // 3️⃣ Release Bed
+        const activeBed = await tx.ipdBedAllocation.findFirst({
+            where: {
+                ipd_admission_id: admissionId,
+                allocation_status: 'Allocated'
+            }
+        });
 
-        const [bed] = await conn.query("SELECT bed_id FROM ipd_bed_allocation WHERE ipd_admission_id = ? AND allocation_status = 'Allocated'", [admissionId]);
-        if (bed.length) {
-            await conn.query(`UPDATE master_bed SET bed_status = 'Available' WHERE bed_id = ?`, [bed[0].bed_id]);
-            await conn.query(`UPDATE ipd_bed_allocation SET allocation_status = 'Released', end_date = NOW() WHERE ipd_admission_id = ?`, [admissionId]);
+        if (activeBed) {
+            await tx.masterBed.update({
+                where: { bed_id: activeBed.bed_id },
+                data: { bed_status: 'Available' }
+            });
+
+            await tx.ipdBedAllocation.update({
+                where: { bed_allocation_id: activeBed.bed_allocation_id },
+                data: {
+                    allocation_status: 'Released',
+                    allocation_end: new Date()
+                }
+            });
         }
 
-        await conn.commit();
         return { message: 'Discharge finalized & bed released' };
-
-    } catch (err) {
-        await conn.rollback();
-        throw err;
-    } finally {
-        conn.release();
-    }
+    });
 };
 
 exports.getDischargeSummary = async (dischargeId) => {
-    const [header] = await db.query('SELECT * FROM ipd_discharges WHERE discharge_id = ?', [dischargeId]);
-    if (!header.length) return null;
-
-    const [diagnosis] = await db.query('SELECT * FROM ipd_discharge_diagnosis WHERE discharge_id = ?', [dischargeId]);
-    const [medications] = await db.query('SELECT * FROM ipd_discharge_medications WHERE discharge_id = ?', [dischargeId]);
-    const [followup] = await db.query('SELECT * FROM ipd_discharge_followups WHERE discharge_id = ?', [dischargeId]);
-
-    return { header: header[0], diagnosis, medications, followup: followup[0] || null };
+    return prisma.ipdDischarge.findUnique({
+        where: { discharge_id: BigInt(dischargeId) },
+        include: {
+            diagnosis: true,
+            medications: true,
+            followups: true,
+            admission: {
+                include: { patient: true }
+            }
+        }
+    });
 };
+

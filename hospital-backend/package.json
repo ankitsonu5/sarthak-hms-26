@@ -7,7 +7,10 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "db:up": "docker compose -f docker/docker-compose.yml up -d",
-    "db:down": "docker compose -f docker/docker-compose.yml down"
+    "db:down": "docker compose -f docker/docker-compose.yml down",
+    "db:seed": "node scripts/reset_and_seed_all.js",
+    "db:migrate": "npx prisma migrate dev",
+    "db:generate": "npx prisma generate"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +19,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@prisma/client": "^5.10.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -23,7 +27,8 @@
     "helmet": "^8.1.0",
     "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
-    "mysql2": "^3.16.1"
+    "pg": "^8.11.3",
+    "prisma": "^5.10.2"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.24",

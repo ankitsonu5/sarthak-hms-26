@@ -1,24 +1,22 @@
-const db = require('../../config/db');
+const { prisma } = require('../../config/db');
 
 const auditLog = (entityType, action) => async (req, _res, next) => {
     const originalJson = _res.json.bind(_res);
 
     _res.json = function (body) {
         if (_res.statusCode < 400 && body?.data) {
-            const entityId = body.data?.id || body.data?.insertId || req.params?.id || null;
+            const entityId = body.data?.id || req.params?.id || null;
 
-            db.query(
-                `INSERT INTO audit_log (entity_type, entity_id, action, details, performed_by, ip_address)
-                 VALUES (?, ?, ?, ?, ?, ?)`,
-                [
-                    entityType,
-                    entityId,
+            prisma.auditLog.create({
+                data: {
+                    entity_type: entityType,
+                    entity_id: entityId ? BigInt(entityId) : 0n,
                     action,
-                    JSON.stringify({ body: req.body, params: req.params }),
-                    req.user?.id || null,
-                    req.ip
-                ]
-            ).catch(err => console.error('[AuditLog] Failed:', err.message));
+                    details: JSON.stringify({ body: req.body, params: req.params }),
+                    performed_by: req.user?.id ? BigInt(req.user.id) : null,
+                    ip_address: req.ip
+                }
+            }).catch(err => console.error('[AuditLog] Failed:', err.message));
         }
 
         return originalJson(body);

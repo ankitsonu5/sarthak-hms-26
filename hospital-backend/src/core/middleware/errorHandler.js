@@ -1,19 +1,19 @@
 const AppError = require('../errors/AppError');
 
-const DB_ERROR_MAP = {
-    'ER_DUP_ENTRY': { statusCode: 409, message: 'Duplicate entry — record already exists' },
-    'ER_NO_REFERENCED_ROW_2': { statusCode: 400, message: 'Referenced record does not exist' },
-    'ER_ROW_IS_REFERENCED_2': { statusCode: 409, message: 'Cannot delete — record is referenced by other data' },
-    'ER_DATA_TOO_LONG': { statusCode: 400, message: 'Input data exceeds allowed length' },
-    'ER_TRUNCATED_WRONG_VALUE': { statusCode: 400, message: 'Invalid data format' }
+const PRISMA_ERROR_MAP = {
+    'P2002': { statusCode: 409, message: 'Duplicate entry — record already exists' },
+    'P2003': { statusCode: 400, message: 'Referenced record does not exist' },
+    'P2014': { statusCode: 409, message: 'Cannot delete — record is referenced by other data' },
+    'P2025': { statusCode: 404, message: 'Record not found' },
+    'P2006': { statusCode: 400, message: 'Invalid data format' },
+    'P2011': { statusCode: 400, message: 'Null constraint violation' }
 };
 
 const isDbConnectionError = (err) => {
     const msg = err?.message || '';
     return (
         err?.code === 'ECONNREFUSED' ||
-        err?.fatal === true ||
-        /(ECONNREFUSED|PROTOCOL_CONNECTION_LOST|ER_ACCESS_DENIED|getaddrinfo ENOTFOUND|pool)/i.test(msg)
+        /(ECONNREFUSED|PROTOCOL_CONNECTION_LOST|getaddrinfo ENOTFOUND|Can't reach database)/i.test(msg)
     );
 };
 
@@ -36,12 +36,12 @@ const errorHandler = (err, _req, res, _next) => {
         });
     }
 
-    const dbErr = DB_ERROR_MAP[err?.code];
-    if (dbErr) {
-        return res.status(dbErr.statusCode).json({
+    const prismaErr = PRISMA_ERROR_MAP[err?.code];
+    if (prismaErr) {
+        return res.status(prismaErr.statusCode).json({
             success: false,
             status: 'fail',
-            message: dbErr.message
+            message: prismaErr.message
         });
     }
 

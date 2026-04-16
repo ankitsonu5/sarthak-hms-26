@@ -1,29 +1,32 @@
-const mysql = require('mysql2/promise');
+const { PrismaClient } = require('@prisma/client');
 
-const pool = mysql.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'hospital_db',
-    waitForConnections: true,
-    connectionLimit: 10,
-    maxIdle: 10,
-    idleTimeout: 60000,
-    queueLimit: 0,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 0
+const prisma = new PrismaClient({
+    log: [
+        { level: 'query', emit: 'event' },
+        { level: 'info', emit: 'stdout' },
+        { level: 'warn', emit: 'stdout' },
+        { level: 'error', emit: 'stdout' },
+    ],
 });
 
-// Test connection
-pool.getConnection()
-    .then(connection => {
-        console.log('✅ MySQL Connected Successfully to:', process.env.DB_NAME);
-        connection.release();
+// Log Queries for Development
+if (process.env.NODE_ENV === 'development') {
+    prisma.$on('query', (e) => {
+        console.log(`\x1b[36mQuery: ${e.query}\x1b[0m`);
+        console.log(`\x1b[33mParams: ${e.params}\x1b[0m`);
+        console.log(`\x1b[32mDuration: ${e.duration}ms\x1b[0m`);
+        console.log('---');
+    });
+}
+
+prisma.$connect()
+    .then(() => {
+        console.log('✅ PostgreSQL Connected Successfully via Prisma');
     })
     .catch(err => {
-        console.error('❌ MySQL Connection Failed!');
-        console.error('Error Details:', err.message);
+        console.error('❌ PostgreSQL Connection Failed!');
+        console.error('Error:', err.message);
+        process.exit(1);
     });
 
-module.exports = pool;
+module.exports = { prisma };

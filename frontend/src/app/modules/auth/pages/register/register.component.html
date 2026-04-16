@@ -1,0 +1,128 @@
+<div class="min-h-screen flex bg-white">
+
+  <!-- Left Form Panel -->
+  <div class="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-12 py-10 overflow-y-auto">
+    <div class="w-full max-w-[440px]">
+
+      <h1 class="text-3xl font-extrabold text-slate-900">Create Account</h1>
+      <p class="text-slate-400 mt-2 mb-8">Register as a new staff member</p>
+
+      <!-- Alerts -->
+      <div *ngIf="error" class="hms-alert-error"><span>{{ error }}</span></div>
+      <div *ngIf="success" class="hms-alert-success"><span>{{ success }}</span></div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-5">
+
+        <!-- Full Name -->
+        <div>
+          <label class="hms-label">Full Name</label>
+          <input type="text" formControlName="full_name"
+                 class="hms-input" [class.is-invalid]="f['full_name'].touched && f['full_name'].invalid"
+                 placeholder="Enter Full Name" />
+          <p *ngIf="f['full_name'].touched && f['full_name'].errors?.['required']" class="hms-error">Full name is required</p>
+        </div>
+
+        <!-- Email & Phone -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="hms-label">Email</label>
+            <input type="email" formControlName="email"
+                   class="hms-input" [class.is-invalid]="f['email'].touched && f['email'].invalid"
+                   placeholder="Enter Email" autocomplete="email" />
+            <p *ngIf="f['email'].touched && f['email'].errors?.['required']" class="hms-error">Required</p>
+            <p *ngIf="f['email'].touched && f['email'].errors?.['email']" class="hms-error">Invalid email</p>
+          </div>
+          <div>
+            <label class="hms-label">Phone <span class="font-normal text-slate-400">(opt)</span></label>
+            <input type="tel" formControlName="phone"
+                   class="hms-input" placeholder="+91 98765 43210" />
+          </div>
+        </div>
+
+        <!-- Role -->
+        <div>
+          <label class="hms-label">Department Role</label>
+          <div class="relative">
+            <select formControlName="role_id"
+                    class="hms-select" [class.is-invalid]="f['role_id'].touched && f['role_id'].invalid"
+                    [class.text-slate-400]="!form.value.role_id">
+              <option value="">Select Role</option>
+              <option *ngFor="let role of roles" [value]="role.role_id" class="text-slate-800">{{ role.role_name }}</option>
+            </select>
+            <svg class="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+          <p *ngIf="f['role_id'].touched && f['role_id'].errors?.['required']" class="hms-error">Please select a role</p>
+        </div>
+
+        <!-- Passwords -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="hms-label">Password</label>
+            <div class="relative">
+              <input [type]="showPassword ? 'text' : 'password'" formControlName="password"
+                     class="hms-input pr-11" [class.is-invalid]="f['password'].touched && f['password'].invalid"
+                     placeholder="Min 6 chars" autocomplete="new-password" />
+              <button type="button" (click)="showPassword = !showPassword" class="hms-input-eye">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path *ngIf="!showPassword" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm7 0c-1.274 4.057-5.064 7-9.542 7S3.732 16.057 2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7z"/>
+                  <path *ngIf="showPassword" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M3 3l18 18M10.477 10.477a3 3 0 004.243 4.243m1.712-1.712A9.956 9.956 0 0021.542 12c-1.274-4.057-5.064-7-9.542-7a9.97 9.97 0 00-4.556 1.09"/>
+                </svg>
+              </button>
+            </div>
+            <p *ngIf="f['password'].touched && f['password'].errors?.['required']" class="hms-error">Required</p>
+            <p *ngIf="f['password'].touched && f['password'].errors?.['minlength']" class="hms-error">Min 6 chars</p>
+          </div>
+          <div>
+            <label class="hms-label">Confirm Password</label>
+            <div class="relative">
+              <input [type]="showConfirm ? 'text' : 'password'" formControlName="confirmPassword"
+                     class="hms-input pr-11"
+                     [class.is-invalid]="f['confirmPassword'].touched && (f['confirmPassword'].invalid || form.errors?.['passwordMismatch'])"
+                     placeholder="Re-enter" autocomplete="new-password" />
+              <button type="button" (click)="showConfirm = !showConfirm" class="hms-input-eye">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path *ngIf="!showConfirm" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm7 0c-1.274 4.057-5.064 7-9.542 7S3.732 16.057 2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7z"/>
+                  <path *ngIf="showConfirm" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M3 3l18 18M10.477 10.477a3 3 0 004.243 4.243m1.712-1.712A9.956 9.956 0 0021.542 12c-1.274-4.057-5.064-7-9.542-7a9.97 9.97 0 00-4.556 1.09"/>
+                </svg>
+              </button>
+            </div>
+            <p *ngIf="f['confirmPassword'].touched && f['confirmPassword'].errors?.['required']" class="hms-error">Required</p>
+            <p *ngIf="f['confirmPassword'].touched && !f['confirmPassword'].errors?.['required'] && form.errors?.['passwordMismatch']"
+               class="hms-error">Doesn't match</p>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" [disabled]="loading" class="hms-btn-primary">
+          <span *ngIf="!loading">Create Account</span>
+          <span *ngIf="loading" class="inline-flex items-center gap-2">
+            <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            Creating...
+          </span>
+        </button>
+      </form>
+
+      <!-- OR -->
+      <div class="hms-divider">
+        <span class="text-sm text-slate-400 font-medium">OR</span>
+      </div>
+
+      <a routerLink="/auth/login" class="hms-btn-outline">Sign In to Existing Account</a>
+
+      <p class="text-center text-xs text-slate-400 mt-8">&copy; 2026 Sarthak Hospital SaaS Platform. All rights reserved.</p>
+    </div>
+  </div>
+
+  <!-- Right Collage Panel -->
+  <app-auth-panel></app-auth-panel>
+</div>

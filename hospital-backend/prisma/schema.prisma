@@ -1,0 +1,1113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// AUTH & USERS (Enterprise Hospital Grade)
+// =============================================
+
+model MasterRole {
+  role_id          BigInt             @id @default(autoincrement())
+  role_name        String             @unique
+  description      String?
+  is_system_role   Boolean            @default(false)
+  users            User[]
+  role_permissions RolePermission[]
+  user_roles       UserRoleMapping[]
+
+  @@map("master_roles")
+}
+
+model Permission {
+  permission_id BigInt             @id @default(autoincrement())
+  module        String             @db.VarChar(50) // PATIENT, BILLING, LAB, IPD, OPD, PHARMACY, NURSING, ADMIN
+  action        String             @db.VarChar(50) // CREATE, READ, UPDATE, DELETE, APPROVE, EXPORT
+  description   String?
+  role_permissions RolePermission[]
+
+  @@unique([module, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  role_id       BigInt
+  permission_id BigInt
+  role          MasterRole @relation(fields: [role_id], references: [role_id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permission_id], references: [permission_id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model User {
+  user_id           BigInt                @id @default(autoincrement())
+  employee_id       String?               @unique @db.VarChar(50)
+  full_name         String
+  email             String                @unique
+  phone             String?               @unique
+  password_hash     String
+  role_id           BigInt
+  hospital_id       BigInt?
+  profile_photo     String?               @db.VarChar(500)
+  status            String                @default("ACTIVE") @db.VarChar(20) // ACTIVE, SUSPENDED, TERMINATED
+  is_email_verified Boolean               @default(false)
+  is_phone_verified Boolean               @default(false)
+  is_mfa_enabled    Boolean               @default(false)
+  failed_login_count Int                  @default(0)
+  locked_until      DateTime?
+  last_login_at     DateTime?
+  last_login_ip     String?               @db.VarChar(45)
+  password_changed_at DateTime?
+  created_by        BigInt?
+  created_at        DateTime              @default(now())
+  updated_at        DateTime              @updatedAt
+  role              MasterRole            @relation(fields: [role_id], references: [role_id])
+  user_roles        UserRoleMapping[]
+  sessions          UserSession[]
+  login_attempts    LoginAttempt[]
+  password_resets   PasswordResetToken[]
+  mfa_settings      UserMFA?
+  patients_created  PatientMaster[]
+  opd_visits        OpdVisitMaster[]
+  ipd_admissions    IpdAdmissionMaster[]
+  audits_performed  AuditLog[]
+  nursing_observations NursingObservationHeader[]
+  mar_records       MedicationAdministration[]
+  notes_entered     NursingNote[]
+
+  @@map("users")
+}
+
+model UserRoleMapping {
+  id        BigInt   @id @default(autoincrement())
+  user_id   BigInt
+  role_id   BigInt
+  branch_id BigInt?
+  is_active Boolean  @default(true)
+  assigned_at DateTime @default(now())
+  user      User         @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  role      MasterRole   @relation(fields: [role_id], references: [role_id])
+  branch    HospitalBranch? @relation(fields: [branch_id], references: [branch_id])
+
+  @@unique([user_id, role_id, branch_id])
+  @@map("user_role_mapping")
+}
+
+model UserSession {
+  session_id    BigInt   @id @default(autoincrement())
+  user_id       BigInt
+  refresh_token String   @db.Text
+  device_id     String?  @db.VarChar(255)
+  device_type   String?  @db.VarChar(20) // WEB, MOBILE, TABLET
+  ip_address    String?  @db.VarChar(45)
+  user_agent    String?  @db.Text
+  is_revoked    Boolean  @default(false)
+  expires_at    DateTime?
+  last_active_at DateTime @default(now())
+  created_at    DateTime @default(now())
+  user          User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, is_revoked])
+  @@map("user_sessions")
+}
+
+model LoginAttempt {
+  attempt_id   BigInt   @id @default(autoincrement())
+  user_id      BigInt?
+  email        String   @db.VarChar(150)
+  ip_address   String?  @db.VarChar(45)
+  user_agent   String?  @db.Text
+  success      Boolean
+  failure_reason String? @db.VarChar(100)
+  attempted_at DateTime @default(now())
+  user         User?    @relation(fields: [user_id], references: [user_id])
+
+  @@index([email, attempted_at])
+  @@map("login_attempts")
+}
+
+model UserMFA {
+  mfa_id     BigInt   @id @default(autoincrement())
+  user_id    BigInt   @unique
+  mfa_type   String   @db.VarChar(20) // SMS, EMAIL, AUTH_APP
+  secret_key String?  @db.VarChar(255)
+  is_enabled Boolean  @default(false)
+  verified_at DateTime?
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("user_mfa")
+}
+
+model PasswordPolicy {
+  policy_id            BigInt  @id @default(autoincrement())
+  min_length           Int     @default(8)
+  require_uppercase    Boolean @default(true)
+  require_lowercase    Boolean @default(true)
+  require_number       Boolean @default(true)
+  require_special_char Boolean @default(true)
+  password_expiry_days Int     @default(90)
+  max_login_attempts   Int     @default(5)
+  lockout_duration_min Int     @default(30)
+
+  @@map("password_policy")
+}
+
+model PasswordResetToken {
+  token_id   BigInt    @id @default(autoincrement())
+  user_id    BigInt
+  token      String
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+  user       User      @relation(fields: [user_id], references: [user_id])
+
+  @@map("password_reset_tokens")
+}
+
+// =============================================
+// INFRASTRUCTURE
+// =============================================
+
+model HospitalBranch {
+  branch_id   BigInt   @id @default(autoincrement())
+  branch_name String   @unique
+  branch_code String?  @unique
+  address     String?  @db.Text
+  timezone    String?  @default("Asia/Kolkata") @db.VarChar(50)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  user_roles  UserRoleMapping[]
+  patients    PatientMaster[]
+  opd_visits  OpdVisitMaster[]
+
+  @@map("hospital_branch")
+}
+
+model UhidSequence {
+  branch_id   BigInt @id
+  last_number BigInt
+  prefix      String @db.VarChar(10)
+
+  @@map("uhid_sequence")
+}
+
+model AuditLog {
+  audit_id     BigInt   @id @default(autoincrement())
+  entity_type  String   @db.VarChar(50)
+  entity_id    BigInt
+  action       String   @db.VarChar(50)
+  module       String?  @db.VarChar(50)
+  old_value    String?  @db.Text
+  new_value    String?  @db.Text
+  details      String?  @db.Text
+  performed_by BigInt?
+  performed_at DateTime @default(now())
+  ip_address   String?  @db.VarChar(45)
+  user         User?    @relation(fields: [performed_by], references: [user_id])
+
+  @@index([entity_type, entity_id])
+  @@index([performed_by, performed_at])
+  @@map("audit_log")
+}
+
+// =============================================
+// MASTER DATA
+// =============================================
+
+model MasterPatientCategory {
+  category_id   BigInt @id @default(autoincrement())
+  category_name String @unique
+  patients      PatientMaster[]
+
+  @@map("master_patient_category")
+}
+
+model MasterWard {
+  ward_id    BigInt  @id @default(autoincrement())
+  ward_name  String  @unique
+  ward_type  String? // General, Semi-Private, Private, ICU, etc.
+  floor_no   String?
+  is_active  Boolean @default(true)
+  beds       MasterBed[]
+  nursing_obs NursingObservationHeader[]
+
+  @@map("master_ward")
+}
+
+model MasterBed {
+  bed_id     BigInt  @id @default(autoincrement())
+  ward_id    BigInt
+  bed_number String
+  bed_status String @default("Available") // Available, Occupied, Cleaning, Maintenance
+  ward       MasterWard @relation(fields: [ward_id], references: [ward_id])
+  nursing_obs NursingObservationHeader[]
+
+  @@map("master_bed")
+}
+
+// =============================================
+// PATIENTS
+// =============================================
+
+model PatientMaster {
+  patient_id          BigInt                @id @default(autoincrement())
+  uhid                String                @unique
+  first_name          String
+  middle_name         String?
+  last_name           String
+  age                 Int
+  date_of_birth       DateTime              @db.Date
+  gender              String
+  mobile_primary      String
+  mobile_alternate    String?
+  email               String?
+  nationality         String?               @default("Indian")
+  hospital_branch_id  BigInt
+  patient_category_id BigInt
+  is_vip              Boolean               @default(false)
+  is_mlc              Boolean               @default(false)
+  is_unknown_patient  Boolean               @default(false)
+  registration_datetime DateTime            @default(now())
+  created_by          BigInt
+  created_at          DateTime              @default(now())
+  updated_at          DateTime?             @updatedAt
+  status              String                @default("Active")
+
+  branch              HospitalBranch        @relation(fields: [hospital_branch_id], references: [branch_id])
+  category            MasterPatientCategory @relation(fields: [patient_category_id], references: [category_id])
+  creator             User                  @relation(fields: [created_by], references: [user_id])
+  demographics        PatientDemographics?
+  addresses           PatientAddress[]
+  emergency_contacts  PatientEmergencyContact[]
+  consents            PatientConsent[]
+  documents           PatientDocument[]
+  identifiers         PatientIdentifier[]
+  opd_visits          OpdVisitMaster[]
+  ipd_admissions      IpdAdmissionMaster[]
+  discharges          IpdDischarge[]
+  nursing_observations NursingObservationHeader[]
+
+  @@map("patient_master")
+}
+
+model PatientDemographics {
+  patient_id              BigInt @id
+  marital_status_id       BigInt?
+  blood_group_id          BigInt?
+  occupation_id           BigInt?
+  education_level_id      BigInt?
+  socio_economic_class_id BigInt?
+  patient                 PatientMaster @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@map("patient_demographics")
+}
+
+model PatientAddress {
+  address_id    BigInt  @id @default(autoincrement())
+  patient_id    BigInt
+  address_line1 String  @db.VarChar(255)
+  address_line2 String? @db.VarChar(255)
+  city          String  @db.VarChar(100)
+  state         String  @db.VarChar(100)
+  country       String? @default("India") @db.VarChar(100)
+  pincode       String  @db.VarChar(10)
+  is_primary    Boolean @default(true)
+  patient       PatientMaster @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@map("patient_address")
+}
+
+model PatientEmergencyContact {
+  emergency_contact_id BigInt @id @default(autoincrement())
+  patient_id           BigInt
+  contact_name         String @db.VarChar(150)
+  relationship_id      BigInt
+  mobile               String @db.VarChar(15)
+  patient              PatientMaster @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@map("patient_emergency_contact")
+}
+
+model PatientConsent {
+  consent_id               BigInt   @id @default(autoincrement())
+  patient_id               BigInt
+  consent_to_treatment     Boolean  @default(false)
+  consent_to_share_reports Boolean  @default(false)
+  consent_datetime         DateTime @default(now())
+  patient                  PatientMaster @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@map("patient_consent")
+}
+
+model PatientDocument {
+  document_id   BigInt   @id @default(autoincrement())
+  patient_id    BigInt
+  document_type String   @db.VarChar(50)
+  file_path     String   @db.VarChar(255)
+  uploaded_at   DateTime @default(now())
+  patient       PatientMaster @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@map("patient_documents")
+}
+
+model PatientIdentifier {
+  identifier_id   BigInt   @id @default(autoincrement())
+  patient_id      BigInt
+  identifier_type String   @db.VarChar(20)
+  identifier_value String   @db.VarChar(100)
+  generated_at    DateTime @default(now())
+  patient         PatientMaster @relation(fields: [patient_id], references: [patient_id], onDelete: Cascade)
+
+  @@map("patient_identifier")
+}
+
+// =============================================
+// OPD (OUTPATIENT)
+// =============================================
+
+model OpdVisitMaster {
+  opd_visit_id       BigInt   @id @default(autoincrement())
+  visit_no           String   @unique @db.VarChar(30)
+  patient_id         BigInt
+  visit_type         String   // New, Follow-up, Review
+  appointment_type   String   // Walk-In, Pre-Booked, Emergency
+  visit_date         DateTime @db.Date
+  visit_time         String   @db.VarChar(20)
+  hospital_branch_id BigInt
+  department_id      BigInt
+  doctor_id          BigInt
+  opd_room           String?  @db.VarChar(50)
+  token_no           Int
+  queue_type         String?  @default("Normal")
+  chief_complaint    String   @db.Text
+  complaint_duration String?  @db.VarChar(50)
+  visit_reason       String?  @db.VarChar(100)
+  encounter_status   String?  @default("Waiting")
+  created_by         BigInt
+  created_at         DateTime @default(now())
+
+  patient            PatientMaster    @relation(fields: [patient_id], references: [patient_id])
+  branch             HospitalBranch   @relation(fields: [hospital_branch_id], references: [branch_id])
+  creator            User             @relation(fields: [created_by], references: [user_id])
+  vitals             OpdVitals[]
+  billing            OpdBilling[]
+  insurance          OpdInsurance[]
+  followups          OpdFollowup[]
+  ipd_admissions     IpdAdmissionMaster[]
+
+  @@map("opd_visit_master")
+}
+
+model OpdVitals {
+  vitals_id      BigInt   @id @default(autoincrement())
+  opd_visit_id   BigInt
+  height_cm      Decimal? @db.Decimal(5, 2)
+  weight_kg      Decimal? @db.Decimal(5, 2)
+  bmi            Decimal? @db.Decimal(5, 2)
+  blood_pressure String?  @db.VarChar(20)
+  pulse_rate     Int?
+  temperature    Decimal? @db.Decimal(4, 1)
+  spo2           Decimal? @db.Decimal(4, 1)
+  recorded_by    BigInt?
+  recorded_at    DateTime @default(now())
+  visit          OpdVisitMaster @relation(fields: [opd_visit_id], references: [opd_visit_id])
+
+  @@map("opd_vitals")
+}
+
+model OpdBilling {
+  opd_billing_id    BigInt    @id @default(autoincrement())
+  opd_visit_id      BigInt
+  consultation_fee  Decimal   @db.Decimal(10, 2)
+  discount_amount   Decimal?  @default(0) @db.Decimal(10, 2)
+  discount_reason   String?   @db.VarChar(255)
+  net_amount        Decimal   @db.Decimal(10, 2)
+  payment_mode      String    @db.VarChar(50)
+  payment_status    String?   @default("Pending") @db.VarChar(50)
+  payment_datetime  DateTime?
+  visit             OpdVisitMaster @relation(fields: [opd_visit_id], references: [opd_visit_id])
+
+  @@map("opd_billing")
+}
+
+model OpdInsurance {
+  opd_insurance_id       BigInt  @id @default(autoincrement())
+  opd_visit_id           BigInt
+  patient_category       String  @db.VarChar(50)
+  corporate_name         String? @db.VarChar(150)
+  insurance_company      String? @db.VarChar(150)
+  tpa_name               String? @db.VarChar(150)
+  authorization_required Boolean @default(false)
+  authorization_status   String? @default("Not Required") @db.VarChar(50)
+  visit                  OpdVisitMaster @relation(fields: [opd_visit_id], references: [opd_visit_id])
+
+  @@map("opd_insurance_corporate")
+}
+
+model OpdFollowup {
+  followup_id            BigInt    @id @default(autoincrement())
+  opd_visit_id           BigInt
+  followup_required      Boolean   @default(false)
+  followup_date          DateTime? @db.Date
+  admission_advised      Boolean   @default(false)
+  referred_to_doctor_id  BigInt?
+  referred_department_id BigInt?
+  visit                  OpdVisitMaster @relation(fields: [opd_visit_id], references: [opd_visit_id])
+
+  @@map("opd_followup")
+}
+
+// =============================================
+// IPD (INPATIENT)
+// =============================================
+
+model IpdAdmissionMaster {
+  ipd_admission_id      BigInt    @id @default(autoincrement())
+  admission_no          String    @unique @db.VarChar(30)
+  patient_id            BigInt
+  opd_visit_id          BigInt?
+  admission_date        DateTime
+  discharge_date        DateTime?
+  admission_type        String
+  hospital_branch_id    BigInt
+  department_id         BigInt
+  admitting_doctor_id   BigInt
+  consultant_doctor_id  BigInt?
+  patient_category      String
+  primary_diagnosis     String?   @db.VarChar(255)
+  provisional_diagnosis String?   @db.VarChar(255)
+  icd10_code            String?   @db.VarChar(20)
+  admission_status      String?   @default("Admitted")
+  expected_discharge_date DateTime? @db.Date
+  length_of_stay        Int?
+  is_mlc                Boolean   @default(false)
+  mlc_number            String?   @db.VarChar(50)
+  created_by            BigInt
+  created_at            DateTime  @default(now())
+  updated_by            BigInt?
+  updated_at            DateTime? @updatedAt
+
+  patient               PatientMaster  @relation(fields: [patient_id], references: [patient_id])
+  opd_visit             OpdVisitMaster? @relation(fields: [opd_visit_id], references: [opd_visit_id])
+  creator               User           @relation(fields: [created_by], references: [user_id])
+  clinical_details      IpdClinicalDetails?
+  bed_allocations       IpdBedAllocation[]
+  vitals                IpdVitals[]
+  insurance             IpdInsurance[]
+  financials            IpdFinancials[]
+  consents              IpdConsent[]
+  bills                 IpdBill[]
+  orders                IpdOrderMaster[]
+  discharge             IpdDischarge?
+  nursing_observations NursingObservationHeader[]
+  mar_records           MedicationAdministration[]
+  nursing_notes         NursingNote[]
+  wound_assessments     WoundAssessment[]
+  device_logs           DeviceDataLog[]
+
+  @@map("ipd_admission_master")
+}
+
+model IpdClinicalDetails {
+  clinical_id          BigInt @id @default(autoincrement())
+  ipd_admission_id     BigInt @unique
+  chief_complaint      String? @db.Text
+  past_medical_history String? @db.Text
+  allergies            String? @db.Text
+  current_medication   String? @db.Text
+  comorbidities        String? @db.Text
+  risk_category        String? @db.VarChar(50)
+  pregnancy_status     Boolean? @default(false)
+  dnr_status           Boolean? @default(false)
+  admission            IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+
+  @@map("ipd_clinical_details")
+}
+
+model IpdBedAllocation {
+  bed_allocation_id  BigInt    @id @default(autoincrement())
+  ipd_admission_id   BigInt
+  ward_id            BigInt
+  bed_id             BigInt
+  bed_type           String    @db.VarChar(50)
+  allocation_start   DateTime
+  allocation_end     DateTime?
+  allocation_status  String?   @default("Allocated") // Allocated, Released, Transferred
+  isolation_required Boolean   @default(false)
+  admission          IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+
+  @@map("ipd_bed_allocation")
+}
+
+model IpdVitals {
+  vitals_id           BigInt   @id @default(autoincrement())
+  ipd_admission_id    BigInt
+  recorded_at         DateTime @default(now())
+  recorded_by         BigInt?
+  height_cm           Decimal? @db.Decimal(5, 2)
+  weight_kg           Decimal? @db.Decimal(5, 2)
+  bmi                 Decimal? @db.Decimal(5, 2)
+  blood_pressure      String?  @db.VarChar(20)
+  pulse_rate          Int?
+  temperature         Decimal? @db.Decimal(4, 1)
+  spo2                Decimal? @db.Decimal(4, 1)
+  respiratory_rate    Int?
+  gcs_score           Int?
+  remarks             String?  @db.VarChar(255)
+  admission           IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+
+  @@map("ipd_vitals_monitoring")
+}
+
+model IpdInsurance {
+  insurance_id           BigInt  @id @default(autoincrement())
+  ipd_admission_id       BigInt
+  insurance_company      String? @db.VarChar(150)
+  tpa_name               String? @db.VarChar(150)
+  policy_number          String? @db.VarChar(50)
+  corporate_name         String? @db.VarChar(150)
+  authorization_required Boolean @default(true)
+  authorization_status   String? @default("Pending") @db.VarChar(50)
+  authorized_amount      Decimal? @default(0) @db.Decimal(12, 2)
+  copay_percentage       Decimal? @default(0) @db.Decimal(5, 2)
+  package_name           String? @db.VarChar(150)
+  package_code           String? @db.VarChar(50)
+  package_amount         Decimal? @default(0) @db.Decimal(12, 2)
+  admission              IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+
+  @@map("ipd_insurance_details")
+}
+
+model IpdFinancials {
+  financial_id      BigInt  @id @default(autoincrement())
+  ipd_admission_id  BigInt
+  room_charges      Decimal? @default(0) @db.Decimal(12, 2)
+  procedure_charges Decimal? @default(0) @db.Decimal(12, 2)
+  pharmacy_charges  Decimal? @default(0) @db.Decimal(12, 2)
+  lab_charges       Decimal? @default(0) @db.Decimal(12, 2)
+  other_charges     Decimal? @default(0) @db.Decimal(12, 2)
+  gross_amount      Decimal? @default(0) @db.Decimal(12, 2)
+  discount_amount   Decimal? @default(0) @db.Decimal(12, 2)
+  net_amount        Decimal? @default(0) @db.Decimal(12, 2)
+  advance_deposit   Decimal? @default(0) @db.Decimal(12, 2)
+  payment_status    String?  @default("Pending") @db.VarChar(50)
+  billing_type      String?  @default("Open") @db.VarChar(50)
+  admission         IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+
+  @@map("ipd_financials")
+}
+
+model IpdConsent {
+  consent_id        BigInt   @id @default(autoincrement())
+  ipd_admission_id  BigInt
+  general_consent   Boolean  @default(false)
+  surgery_consent   Boolean  @default(false)
+  icu_consent       Boolean  @default(false)
+  blood_consent     Boolean  @default(false)
+  high_risk_consent Boolean  @default(false)
+  consent_signed_by String?  @db.VarChar(150)
+  consent_date      DateTime?
+  admission         IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+
+  @@map("ipd_consent_records")
+}
+
+// =============================================
+// IPD DISCHARGE
+// =============================================
+
+model IpdDischarge {
+  discharge_id           BigInt    @id @default(autoincrement())
+  admission_id           BigInt    @unique
+  patient_id             BigInt
+  discharge_number       String    @unique @db.VarChar(50)
+  discharge_type         String    @db.VarChar(50) // NORMAL, LAMA, DAMA, DEATH, TRANSFER
+  discharge_status       String?   @default("DRAFT") @db.VarChar(50)
+  discharge_date         DateTime
+  discharge_time         DateTime?
+  condition_at_discharge String?   @db.VarChar(255)
+  discharge_notes        String?   @db.Text
+  discharge_summary      String?   @db.Text
+  is_medico_legal        Boolean   @default(false)
+  prepared_by            BigInt?
+  reviewed_by            BigInt?
+  approved_by            BigInt?
+  bed_released_at        DateTime?
+  bed_released_by        BigInt?
+  finalized_at           DateTime?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+
+  admission              IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+  patient                PatientMaster      @relation(fields: [patient_id], references: [patient_id])
+  diagnosis              IpdDischargeDiagnosis[]
+  medications            IpdDischargeMedication[]
+  followups              IpdDischargeFollowup[]
+  settlement             IpdDischargeSettlement?
+  death_details          IpdDischargeDeathDetails?
+
+  @@map("ipd_discharges")
+}
+
+model IpdDischargeDiagnosis {
+  diagnosis_id   BigInt @id @default(autoincrement())
+  discharge_id   BigInt
+  diagnosis_type String @db.VarChar(50) // PRIMARY, SECONDARY, COMORBIDITY
+  icd_code       String? @db.VarChar(20)
+  diagnosis_name String @db.VarChar(255)
+  remarks        String? @db.Text
+
+  discharge      IpdDischarge @relation(fields: [discharge_id], references: [discharge_id])
+
+  @@map("ipd_discharge_diagnosis")
+}
+
+model IpdDischargeMedication {
+  medication_id BigInt @id @default(autoincrement())
+  discharge_id BigInt
+  medicine_name String @db.VarChar(255)
+  dosage        String? @db.VarChar(100)
+  frequency     String? @db.VarChar(100)
+  duration      String? @db.VarChar(100)
+  route         String? @db.VarChar(50)
+  instructions  String? @db.Text
+
+  discharge     IpdDischarge @relation(fields: [discharge_id], references: [discharge_id])
+
+  @@map("ipd_discharge_medications")
+}
+
+model IpdDischargeFollowup {
+  followup_id       BigInt    @id @default(autoincrement())
+  discharge_id     BigInt
+  followup_date     DateTime? @db.Date
+  department_id     BigInt?
+  doctor_id         BigInt?
+  instructions      String?   @db.Text
+  auto_opd_booking  Boolean   @default(false)
+
+  discharge         IpdDischarge @relation(fields: [discharge_id], references: [discharge_id])
+
+  @@map("ipd_discharge_followups")
+}
+
+model IpdDischargeSettlement {
+  settlement_id      BigInt   @id @default(autoincrement())
+  discharge_id       BigInt   @unique
+  gross_amount       Decimal? @db.Decimal(15, 2)
+  total_discount     Decimal? @db.Decimal(15, 2)
+  total_tax          Decimal? @db.Decimal(15, 2)
+  insurance_claimed  Decimal? @db.Decimal(15, 2)
+  insurance_approved Decimal? @db.Decimal(15, 2)
+  advance_paid       Decimal? @db.Decimal(15, 2)
+  total_paid         Decimal? @db.Decimal(15, 2)
+  refund_amount      Decimal? @db.Decimal(15, 2)
+  balance_due        Decimal? @db.Decimal(15, 2)
+  settlement_status  String?  @db.VarChar(50) // PENDING, SETTLED, REFUND_PENDING
+  settled_by         BigInt?
+  settled_at         DateTime?
+
+  discharge          IpdDischarge @relation(fields: [discharge_id], references: [discharge_id])
+
+  @@map("ipd_discharge_settlement")
+}
+
+model IpdDischargeDeathDetails {
+  death_id            BigInt    @id @default(autoincrement())
+  discharge_id        BigInt    @unique
+  death_time          DateTime?
+  cause_of_death      String?   @db.Text
+  immediate_cause     String?   @db.Text
+  underlying_cause    String?   @db.Text
+  informed_to_family  Boolean   @default(false)
+  body_handover_time  DateTime?
+
+  discharge           IpdDischarge @relation(fields: [discharge_id], references: [discharge_id])
+
+  @@map("ipd_discharge_death_details")
+}
+
+// =============================================
+// IPD BILLING
+// =============================================
+
+model IpdBill {
+  bill_id                   BigInt    @id @default(autoincrement())
+  admission_id              BigInt
+  bill_number               String    @unique @db.VarChar(50)
+  bill_type                 String    @db.VarChar(50) // PROVISIONAL, INTERIM, FINAL
+  bill_status               String?   @default("RUNNING") @db.VarChar(50)
+  gross_amount              Decimal?  @default(0) @db.Decimal(15, 2)
+  total_discount            Decimal?  @default(0) @db.Decimal(15, 2)
+  total_tax                 Decimal?  @default(0) @db.Decimal(15, 2)
+  net_amount                Decimal?  @default(0) @db.Decimal(15, 2)
+  round_off_amount          Decimal?  @default(0) @db.Decimal(10, 2)
+  total_paid_amount         Decimal?  @default(0) @db.Decimal(15, 2)
+  total_due_amount          Decimal?  @default(0) @db.Decimal(15, 2)
+  insurance_claim_amount    Decimal?  @default(0) @db.Decimal(15, 2)
+  insurance_approved_amount Decimal?  @default(0) @db.Decimal(15, 2)
+  patient_payable_amount    Decimal?  @default(0) @db.Decimal(15, 2)
+  corporate_payable_amount  Decimal?  @default(0) @db.Decimal(15, 2)
+  finalized_by              BigInt?
+  finalized_at              DateTime?
+  created_at                DateTime  @default(now())
+  updated_at                DateTime  @updatedAt
+
+  admission                 IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+  items                     IpdBillItem[]
+  payments                  IpdPayment[]
+
+  @@map("ipd_bill")
+}
+
+model IpdBillItem {
+  bill_item_id    BigInt   @id @default(autoincrement())
+  bill_id         BigInt
+  service_type    String   @db.VarChar(50)
+  service_category String?  @db.VarChar(100)
+  service_id      BigInt?
+  service_code     String?  @db.VarChar(50)
+  service_name     String   @db.VarChar(255)
+  quantity         Decimal? @default(1) @db.Decimal(10, 2)
+  unit_price      Decimal  @db.Decimal(15, 2)
+  gross_amount    Decimal? @db.Decimal(15, 2)
+  discount_percent Decimal? @default(0) @db.Decimal(5, 2)
+  discount_amount Decimal? @default(0) @db.Decimal(15, 2)
+  taxable_amount  Decimal? @db.Decimal(15, 2)
+  tax_percent     Decimal? @default(0) @db.Decimal(5, 2)
+  tax_amount      Decimal? @db.Decimal(15, 2)
+  net_amount      Decimal? @db.Decimal(15, 2)
+  doctor_id       BigInt?
+  department_id   BigInt?
+  cost_center_id  BigInt?
+  performed_at    DateTime?
+  is_package_item Boolean? @default(false)
+  package_id      BigInt?
+  item_status     String?  @default("ACTIVE") @db.VarChar(50)
+  created_at      DateTime @default(now())
+
+  bill            IpdBill  @relation(fields: [bill_id], references: [bill_id])
+
+  @@map("ipd_bill_items")
+}
+
+model IpdPayment {
+  payment_id       BigInt    @id @default(autoincrement())
+  bill_id          BigInt
+  payment_date     DateTime
+  payment_mode     String    @db.VarChar(50)
+  reference_number String?   @db.VarChar(100)
+  transaction_id   String?   @db.VarChar(100)
+  amount           Decimal   @db.Decimal(15, 2)
+  received_by      BigInt?
+  payment_status   String?   @default("SUCCESS") @db.VarChar(50)
+  remarks          String?   @db.Text
+  created_at       DateTime  @default(now())
+
+  bill             IpdBill   @relation(fields: [bill_id], references: [bill_id])
+
+  @@map("ipd_payments")
+}
+
+// =============================================
+// ORDERS
+// =============================================
+
+model IpdOrderMaster {
+  order_master_id    BigInt   @id @default(autoincrement())
+  ipd_admission_id   BigInt
+  doctor_id          BigInt
+  order_datetime     DateTime @default(now())
+  priority           String?  @default("Routine") @db.VarChar(50)
+  order_source       String?  @default("Manual") @db.VarChar(50)
+  verbal_order_flag  Boolean  @default(false)
+  verbal_order_verified_by BigInt?
+  order_status       String?  @default("Active") @db.VarChar(50)
+  clinical_notes     String?  @db.Text
+  approval_required  Boolean  @default(false)
+  approved_by        BigInt?
+  approved_at        DateTime?
+  is_package_case    Boolean  @default(false)
+  created_by         BigInt?
+  created_at         DateTime @default(now())
+  updated_by         BigInt?
+  updated_at         DateTime? @updatedAt
+
+  admission          IpdAdmissionMaster @relation(fields: [ipd_admission_id], references: [ipd_admission_id])
+  items              IpdOrderItem[]
+
+  @@map("ipd_order_master")
+}
+
+model IpdOrderItem {
+  order_item_id      BigInt   @id @default(autoincrement())
+  order_master_id    BigInt
+  order_type         String   @db.VarChar(50)
+  reference_code     BigInt?
+  scheduled_datetime DateTime?
+  order_status       String?  @default("Ordered") @db.VarChar(50)
+  is_critical        Boolean  @default(false)
+  remarks            String?  @db.Text
+  created_at         DateTime @default(now())
+
+  master             IpdOrderMaster @relation(fields: [order_master_id], references: [order_master_id])
+
+  @@map("ipd_order_items")
+}
+
+// =============================================
+// NURSING
+// =============================================
+
+model NursingObservationHeader {
+  observation_id   BigInt   @id @default(autoincrement())
+  admission_id     BigInt
+  patient_id       BigInt
+  bed_id           BigInt?
+  ward_id          BigInt?
+  observation_datetime DateTime
+  shift_type       String   @db.VarChar(20) // Morning, Evening, Night
+  recorded_by      BigInt
+  verified_by      BigInt?
+  status           String?  @default("Draft") @db.VarChar(20)
+  remarks          String?  @db.Text
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  admission        IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+  patient          PatientMaster      @relation(fields: [patient_id], references: [patient_id])
+  recorder         User               @relation(fields: [recorded_by], references: [user_id])
+  bed              MasterBed?         @relation(fields: [bed_id], references: [bed_id])
+  ward             MasterWard?        @relation(fields: [ward_id], references: [ward_id])
+  vitals           NursingVitalSigns[]
+  intake_output    IntakeOutput[]
+  ews              EarlyWarningScore[]
+  neuro_charts     NeuroChart[]
+  ventilator_charts VentilatorChart[]
+
+  @@map("nursing_observation_header")
+}
+
+model NursingVitalSigns {
+  vital_id           BigInt   @id @default(autoincrement())
+  observation_id     BigInt
+  temperature        Decimal? @db.Decimal(4, 2)
+  pulse              Int?
+  respiration_rate   Int?
+  systolic_bp        Int?
+  diastolic_bp       Int?
+  spo2               Int?
+  weight             Decimal? @db.Decimal(5, 2)
+  height             Decimal? @db.Decimal(5, 2)
+  bmi                Decimal? @db.Decimal(5, 2)
+  pain_score         Int?
+  gcs_eye            Int?
+  gcs_verbal         Int?
+  gcs_motor          Int?
+  gcs_total          Int?
+  oxygen_support     Boolean? @default(false)
+  oxygen_flow_rate   Decimal? @db.Decimal(5, 2)
+  device_source      String?  @db.VarChar(100)
+  created_at         DateTime @default(now())
+
+  observation        NursingObservationHeader @relation(fields: [observation_id], references: [observation_id])
+
+  @@map("vital_signs")
+}
+
+model IntakeOutput {
+  io_id                BigInt   @id @default(autoincrement())
+  observation_id       BigInt
+  oral_intake_ml       Decimal? @db.Decimal(8, 2)
+  iv_intake_ml         Decimal? @db.Decimal(8, 2)
+  blood_transfusion_ml Decimal? @db.Decimal(8, 2)
+  urine_output_ml      Decimal? @db.Decimal(8, 2)
+  stool_output_ml      Decimal? @db.Decimal(8, 2)
+  vomit_output_ml      Decimal? @db.Decimal(8, 2)
+  drain_output_ml      Decimal? @db.Decimal(8, 2)
+  gastric_output_ml    Decimal? @db.Decimal(8, 2)
+  net_balance_ml       Decimal? @db.Decimal(8, 2)
+  calculated_at        DateTime @default(now())
+
+  observation          NursingObservationHeader @relation(fields: [observation_id], references: [observation_id])
+
+  @@map("intake_output")
+}
+
+model MedicationAdministration {
+  mar_id                BigInt   @id @default(autoincrement())
+  admission_id          BigInt
+  medication_order_id   BigInt
+  medication_name       String   @db.VarChar(255)
+  dose                  String?  @db.VarChar(100)
+  route                 String?  @db.VarChar(50)
+  frequency             String?  @db.VarChar(50)
+  scheduled_time        DateTime?
+  administered_time     DateTime?
+  administered_by       BigInt?
+  status                String?  @default("Given") @db.VarChar(20)
+  skip_reason           String?  @db.Text
+  barcode_verified      Boolean  @default(false)
+  adverse_reaction_flag Boolean  @default(false)
+  reaction_notes        String?  @db.Text
+  created_at            DateTime @default(now())
+
+  admission             IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+  administer            User?               @relation(fields: [administered_by], references: [user_id])
+
+  @@map("medication_administration")
+}
+
+model NursingNote {
+  note_id           BigInt   @id @default(autoincrement())
+  admission_id     BigInt
+  note_type         String   @db.VarChar(20) // Progress, Critical, Incident, Transfer, General
+  note_text         String   @db.Text
+  escalation_flag   Boolean  @default(false)
+  escalation_time   DateTime?
+  informed_doctor_id BigInt?
+  entered_by        BigInt
+  entered_at        DateTime @default(now())
+
+  admission         IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+  entry_by          User               @relation(fields: [entered_by], references: [user_id])
+
+  @@map("nursing_notes")
+}
+
+model EarlyWarningScore {
+  ews_id               BigInt   @id @default(autoincrement())
+  observation_id       BigInt
+  temperature_score    Int?
+  pulse_score          Int?
+  respiration_score    Int?
+  bp_score             Int?
+  spo2_score           Int?
+  gcs_score            Int?
+  total_score          Int?
+  risk_level           String?  @db.VarChar(20) // Low, Moderate, High, Critical
+  escalation_triggered Boolean  @default(false)
+  escalation_time      DateTime?
+  calculated_at        DateTime @default(now())
+
+  observation          NursingObservationHeader @relation(fields: [observation_id], references: [observation_id])
+
+  @@map("early_warning_score")
+}
+
+model NeuroChart {
+  neuro_id               BigInt   @id @default(autoincrement())
+  observation_id         BigInt
+  pupil_size_left        Decimal? @db.Decimal(3, 1)
+  pupil_size_right       Decimal? @db.Decimal(3, 1)
+  pupil_reaction_left    String?  @db.VarChar(20) // Brisk, Sluggish, Fixed
+  pupil_reaction_right    String?  @db.VarChar(20)
+  limb_movement          String?  @db.VarChar(255)
+  seizure_activity       Boolean  @default(false)
+  notes                  String?  @db.Text
+  recorded_at            DateTime @default(now())
+
+  observation            NursingObservationHeader @relation(fields: [observation_id], references: [observation_id])
+
+  @@map("neuro_chart")
+}
+
+model VentilatorChart {
+  ventilator_id     BigInt   @id @default(autoincrement())
+  observation_id    BigInt
+  mode              String?  @db.VarChar(100)
+  fio2              Decimal? @db.Decimal(5, 2)
+  peep              Decimal? @db.Decimal(5, 2)
+  tidal_volume      Decimal? @db.Decimal(8, 2)
+  respiratory_rate  Int?
+  airway_pressure   Decimal? @db.Decimal(8, 2)
+  ventilator_settings String? @db.Text
+  recorded_at       DateTime @default(now())
+
+  observation       NursingObservationHeader @relation(fields: [observation_id], references: [observation_id])
+
+  @@map("ventilator_chart")
+}
+
+model WoundAssessment {
+  wound_id       BigInt   @id @default(autoincrement())
+  admission_id   BigInt
+  wound_location String?  @db.VarChar(255)
+  wound_type     String?  @db.VarChar(255)
+  wound_size_cm  String?  @db.VarChar(100)
+  infection_sign Boolean  @default(false)
+  dressing_done  Boolean  @default(false)
+  photo_path     String?  @db.VarChar(500)
+  assessed_by    BigInt?
+  assessed_at    DateTime @default(now())
+
+  admission      IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+
+  @@map("wound_assessment")
+}
+
+model DeviceDataLog {
+  device_log_id   BigInt   @id @default(autoincrement())
+  admission_id    BigInt
+  device_id       String?  @db.VarChar(100)
+  parameter_name  String?  @db.VarChar(100)
+  parameter_value String?  @db.VarChar(100)
+  recorded_at     DateTime?
+  source          String?  @db.VarChar(20) // Manual, Monitor, Ventilator, InfusionPump
+
+  admission       IpdAdmissionMaster @relation(fields: [admission_id], references: [ipd_admission_id])
+
+  @@map("device_data_log")
+}
+
+// =============================================
+// PHARMACY & INVENTORY
+// =============================================
+
+model PharmacyItem {
+  item_id           BigInt   @id @default(autoincrement())
+  item_code         String   @unique @db.VarChar(50)
+  item_name         String   @db.VarChar(255)
+  generic_name      String?  @db.VarChar(255)
+  item_category     String   @db.VarChar(100)
+  unit_type         String   @db.VarChar(50) // Tablet, Syrup, Injection
+  is_active         Boolean  @default(true)
+  reorder_level     Int?     @default(10)
+  created_at        DateTime @default(now())
+  batches           PharmacyBatch[]
+  stock             PharmacyInventory[]
+
+  @@map("pharmacy_items")
+}
+
+model PharmacyBatch {
+  batch_id          BigInt   @id @default(autoincrement())
+  item_id           BigInt
+  batch_number      String   @db.VarChar(50)
+  expiry_date       DateTime @db.Date
+  purchase_price    Decimal  @db.Decimal(15, 2)
+  sale_price        Decimal  @db.Decimal(15, 2)
+  is_active         Boolean  @default(true)
+  item              PharmacyItem @relation(fields: [item_id], references: [item_id])
+  stock             PharmacyInventory[]
+
+  @@map("pharmacy_batches")
+}
+
+model PharmacyInventory {
+  inventory_id      BigInt   @id @default(autoincrement())
+  item_id           BigInt
+  batch_id          BigInt?
+  store_id          BigInt?
+  quantity          Decimal  @default(0) @db.Decimal(12, 2)
+  item              PharmacyItem @relation(fields: [item_id], references: [item_id])
+  batch             PharmacyBatch? @relation(fields: [batch_id], references: [batch_id])
+
+  @@map("pharmacy_inventory")
+}

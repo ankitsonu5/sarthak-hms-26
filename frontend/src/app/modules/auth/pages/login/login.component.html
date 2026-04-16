@@ -1,0 +1,82 @@
+<div class="min-h-screen flex bg-white">
+
+  <!-- Left Form Panel -->
+  <div class="w-full lg:w-1/2 flex items-center justify-center px-6 sm:px-12 py-10">
+    <div class="w-full max-w-[440px]">
+
+      <h1 class="text-3xl font-extrabold text-slate-900">Sign In</h1>
+      <p class="text-slate-400 mt-2 mb-8">Access your hospital dashboard</p>
+
+      <!-- Error -->
+      <div *ngIf="error" class="hms-alert-error">
+        <span>{{ error }}</span>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate class="space-y-5">
+
+        <!-- Email -->
+        <div>
+          <label class="hms-label">Email / Mobile</label>
+          <input type="email" formControlName="email"
+                 class="hms-input" [class.is-invalid]="f['email'].touched && f['email'].invalid"
+                 placeholder="Enter Email or Mobile" autocomplete="email" />
+          <p *ngIf="f['email'].touched && f['email'].errors?.['required']" class="hms-error">Email is required</p>
+          <p *ngIf="f['email'].touched && f['email'].errors?.['email']" class="hms-error">Enter a valid email</p>
+        </div>
+
+        <!-- Password -->
+        <div>
+          <label class="hms-label">Password</label>
+          <div class="relative">
+            <input [type]="showPassword ? 'text' : 'password'" formControlName="password"
+                   class="hms-input pr-12" [class.is-invalid]="f['password'].touched && f['password'].invalid"
+                   placeholder="Enter Password" autocomplete="current-password" />
+            <button type="button" (click)="showPassword = !showPassword" class="hms-input-eye">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path *ngIf="!showPassword" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm7 0c-1.274 4.057-5.064 7-9.542 7S3.732 16.057 2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7z"/>
+                <path *ngIf="showPassword" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M3 3l18 18M10.477 10.477a3 3 0 004.243 4.243m1.712-1.712A9.956 9.956 0 0021.542 12c-1.274-4.057-5.064-7-9.542-7a9.97 9.97 0 00-4.556 1.09"/>
+              </svg>
+            </button>
+          </div>
+          <p *ngIf="f['password'].touched && f['password'].errors?.['required']" class="hms-error">Password is required</p>
+          <p *ngIf="f['password'].touched && f['password'].errors?.['minlength']" class="hms-error">Minimum 6 characters</p>
+        </div>
+
+        <!-- Remember + Forgot -->
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600" />
+            <span class="text-sm text-slate-600">Remember Me</span>
+          </label>
+          <a class="text-sm font-semibold text-blue-600 hover:text-blue-700 cursor-pointer">Forgot Password?</a>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" [disabled]="loading" class="hms-btn-primary">
+          <span *ngIf="!loading">Sign In</span>
+          <span *ngIf="loading" class="inline-flex items-center gap-2">
+            <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            Signing in...
+          </span>
+        </button>
+      </form>
+
+      <!-- OR -->
+      <div class="hms-divider">
+        <span class="text-sm text-slate-400 font-medium">OR</span>
+      </div>
+
+      <a routerLink="/auth/register" class="hms-btn-outline">Create New Account</a>
+
+      <p class="text-center text-xs text-slate-400 mt-8">&copy; 2026 Sarthak Hospital SaaS Platform. All rights reserved.</p>
+    </div>
+  </div>
+
+  <!-- Right Collage Panel -->
+  <app-auth-panel></app-auth-panel>
+</div>

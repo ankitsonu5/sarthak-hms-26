@@ -30,3 +30,11 @@ exports.noContent = (res, message = 'Deleted successfully') =>
         success: true,
         message
     });
+
+exports.error = (res, message = 'Something went wrong', statusCode = 500, errors = []) =>
+    res.status(statusCode).json({
+        success: false,
+        message,
+        statusCode,
+        ...(errors.length && { errors })
+    });

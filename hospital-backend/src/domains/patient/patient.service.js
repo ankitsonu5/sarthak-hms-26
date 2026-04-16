@@ -1,146 +1,96 @@
-const db = require('../../config/db');
+const { prisma } = require('../../config/db');
+const BaseService = require('../../core/base/BaseService');
 
-exports.register = async (payload, userId) => {
-    const conn = await db.getConnection();
-
-    try {
-        await conn.beginTransaction();
-
-        console.log("Starting Registration for:", payload.mobile_primary);
-
-        // 1️⃣ Create Patient Master (Calls sp_create_patient_master)
-        // NOTE: Procedure expects: uhid_input, first, middle, last, dob, gender, mob1, mob2, email, branch, category, created_by
-        const [patientResult] = await conn.query(
-            `CALL sp_create_patient_master(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                payload.uhid || null, // Allow NULL to auto-generate
-                payload.first_name,
-                payload.middle_name || null,
-                payload.last_name,
-                payload.date_of_birth,
-                payload.gender,
-                payload.mobile_primary,
-                payload.mobile_alternate || null,
-                payload.email || null,
-                payload.hospital_branch_id,
-                payload.patient_category_id,
-                userId
-            ]
-        );
-
-        // Extract Result (Patient ID & UHID)
-        // Procedures return result sets. patientResult[0] is the first result set rows.
-        const row = patientResult[0][0];
-        if (!row || !row.patient_id) {
-            throw new Error("Failed to create patient master record.");
-        }
-
-        const patientId = row.patient_id;
-        const uhid = row.uhid;
-
-        console.log(`Patient Created: ID=${patientId}, UHID=${uhid}`);
-
-        // 2️⃣ Save Demographics
-        await conn.query(
-            `CALL sp_save_patient_demographics(?, ?, ?, ?, ?, ?)`,
-            [
-                patientId,
-                payload.marital_status_id || null,
-                payload.blood_group_id || null,
-                payload.occupation_id || null,
-                payload.education_level_id || null,
-                payload.socio_economic_class_id || null
-            ]
-        );
-
-        // 3️⃣ Save Address
-        await conn.query(
-            `CALL sp_save_patient_address(?, ?, ?, ?, ?, ?, ?)`,
-            [
-                patientId,
-                payload.address_line1,
-                payload.address_line2 || null,
-                payload.city,
-                payload.state,
-                payload.country || 'India',
-                payload.pincode
-            ]
-        );
-
-        // 4️⃣ Save Emergency Contact (Optional)
-        if (payload.emergency_contact_name) {
-            await conn.query(
-                `CALL sp_save_emergency_contact(?, ?, ?, ?)`,
-                [
-                    patientId,
-                    payload.emergency_contact_name,
-                    payload.emergency_relationship_id || null,
-                    payload.emergency_mobile
-                ]
-            );
-        }
-
-        // 5️⃣ Save Consent
-        await conn.query(
-            `CALL sp_save_patient_consent(?, ?, ?)`,
-            [
-                patientId,
-                payload.consent_to_treatment ? 1 : 0,
-                payload.consent_to_share_reports ? 1 : 0
-            ]
-        );
-
-        await conn.commit();
-        console.log("Transaction Committed.");
-
-        return { patient_id: patientId, uhid: uhid };
-
-    } catch (err) {
-        await conn.rollback();
-        console.error("Transaction Rolled Back:", err.message);
-        throw err;
-    } finally {
-        conn.release();
+/**
+ * @desc Enterprise Patient Management Service
+ */
+class PatientService extends BaseService {
+    constructor() {
+        super('patientMaster', 'patient_id');
     }
-};
-// 6️⃣ List All Patients
-exports.getAll = async () => {
-    const [rows] = await db.query('SELECT * FROM patient_master ORDER BY created_at DESC');
-    return rows;
-};
 
-// 7️⃣ Get Patient by ID (Detailed)
-exports.getById = async (id) => {
-    const [rows] = await db.query('SELECT * FROM patient_master WHERE patient_id = ?', [id]);
-    if (rows.length === 0) return null;
+    async register(payload, userId) {
+        return this.tx(async (tx) => {
+            // 1️⃣ Check for Duplicate Mobile
+            const existing = await tx.patientMaster.findFirst({
+                where: { mobile_primary: payload.mobile_primary }
+            });
 
-    const patient = rows[0];
+            if (existing) throw new Error("Patient already registered with this mobile number.");
 
-    // Fetch associated data
-    const [demographics] = await db.query('SELECT * FROM patient_demographics WHERE patient_id = ?', [id]);
-    const [address] = await db.query('SELECT * FROM patient_address WHERE patient_id = ?', [id]);
+            // 2️⃣ UHID Generation Logic
+            const seq = await tx.uhidSequence.upsert({
+                where: { branch_id: BigInt(payload.hospital_branch_id) },
+                update: { last_number: { increment: 1 } },
+                create: {
+                    branch_id: BigInt(payload.hospital_branch_id),
+                    last_number: 1,
+                    prefix: 'HMS'
+                }
+            });
 
-    return {
-        ...patient,
-        demographics: demographics[0] || null,
-        address: address[0] || null
-    };
-};
+            const year = new Date().getFullYear();
+            const uhid = payload.uhid || `${seq.prefix}-${year}-${seq.last_number.toString().padStart(7, '0')}`;
 
-// 8️⃣ Update Patient
-exports.update = async (id, payload) => {
-    await db.query(
-        `UPDATE patient_master SET 
-            first_name = ?, last_name = ?, mobile_primary = ?, email = ?
-         WHERE patient_id = ?`,
-        [payload.first_name, payload.last_name, payload.mobile_primary, payload.email, id]
-    );
-    return { message: 'Patient updated successfully' };
-};
+            // 3️⃣ Create Patient Record
+            const patient = await tx.patientMaster.create({
+                data: {
+                    uhid,
+                    first_name: payload.first_name,
+                    middle_name: payload.middle_name || null,
+                    last_name: payload.last_name,
+                    age: payload.age || 0,
+                    date_of_birth: new Date(payload.date_of_birth),
+                    gender: payload.gender,
+                    mobile_primary: payload.mobile_primary,
+                    mobile_alternate: payload.mobile_alternate || null,
+                    email: payload.email || null,
+                    hospital_branch_id: BigInt(payload.hospital_branch_id),
+                    patient_category_id: BigInt(payload.patient_category_id),
+                    created_by: BigInt(userId),
+                    demographics: {
+                        create: {
+                            marital_status_id: payload.marital_status_id ? BigInt(payload.marital_status_id) : null,
+                            blood_group_id: payload.blood_group_id ? BigInt(payload.blood_group_id) : null,
+                        }
+                    },
+                    addresses: {
+                        create: {
+                            address_line1: payload.address_line1,
+                            city: payload.city,
+                            state: payload.state,
+                            pincode: payload.pincode,
+                        }
+                    }
+                }
+            });
 
-// 9️⃣ Delete Patient
-exports.delete = async (id) => {
-    // In hospital systems, we usually don't delete. But for this "simple" request, we will.
-    await db.query('DELETE FROM patient_master WHERE patient_id = ?', [id]);
-    return { message: 'Patient deleted successfully' };
-};
+            // 4️⃣ Audit Log
+            await tx.auditLog.create({
+                data: {
+                    entity_type: 'PATIENT',
+                    entity_id: patient.patient_id,
+                    action: 'REGISTER',
+                    performed_by: BigInt(userId),
+                    details: `Registered UHID: ${uhid}`
+                }
+            });
+
+            return { patient_id: patient.patient_id, uhid };
+        });
+    }
+
+    async getFullDetails(id) {
+        return this.model.findUnique({
+            where: { patient_id: BigInt(id) },
+            include: {
+                demographics: true,
+                addresses: true,
+                emergency_contacts: true,
+                consents: true
+            }
+        });
+    }
+}
+
+module.exports = new PatientService();

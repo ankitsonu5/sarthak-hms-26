@@ -1,1 +1,0 @@
-// bed_occupancy.view.sql

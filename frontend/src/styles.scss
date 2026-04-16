@@ -65,3 +65,76 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* ============================================
+   Reusable Form Components
+   ============================================ */
+
+.hms-label {
+  @apply block text-sm font-bold text-slate-700 mb-2;
+}
+
+.hms-input {
+  @apply w-full h-[50px] px-4 rounded-xl border-2 border-slate-200
+         bg-slate-50/50 text-sm outline-none transition-all duration-200
+         placeholder:text-slate-400
+         focus:border-blue-500 focus:bg-white focus:shadow-[0_0_0_3px] focus:shadow-blue-500/10;
+
+  &.is-invalid {
+    @apply border-red-300;
+  }
+}
+
+.hms-input-eye {
+  @apply absolute right-3.5 top-1/2 -translate-y-1/2
+         text-slate-400 hover:text-slate-600 transition-colors;
+}
+
+.hms-select {
+  @apply w-full h-[50px] px-4 pr-10 rounded-xl border-2 border-slate-200
+         bg-slate-50/50 text-sm outline-none appearance-none cursor-pointer
+         transition-all duration-200
+         focus:border-blue-500 focus:bg-white focus:shadow-[0_0_0_3px] focus:shadow-blue-500/10;
+
+  &.is-invalid {
+    @apply border-red-300;
+  }
+}
+
+.hms-error {
+  @apply mt-1.5 text-xs text-red-500;
+}
+
+.hms-btn-primary {
+  @apply w-full h-[50px] rounded-xl text-white font-bold text-[15px] tracking-wide
+         bg-gradient-to-r from-blue-600 to-blue-700
+         hover:from-blue-700 hover:to-blue-800
+         active:scale-[0.98] transition-all duration-200
+         shadow-lg shadow-blue-600/30 hover:shadow-xl hover:shadow-blue-600/40
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.hms-btn-outline {
+  @apply flex items-center justify-center w-full h-[50px] rounded-xl
+         text-[15px] font-bold border-2 border-blue-600 text-blue-600
+         hover:bg-blue-50 transition-all duration-200 cursor-pointer;
+}
+
+.hms-divider {
+  @apply flex items-center gap-4 my-6;
+
+  &::before, &::after {
+    content: '';
+    @apply flex-1 h-px bg-slate-200;
+  }
+}
+
+.hms-alert-error {
+  @apply mb-6 px-4 py-3.5 rounded-xl bg-red-50 border border-red-100
+         text-red-600 text-sm flex items-start gap-3;
+}
+
+.hms-alert-success {
+  @apply mb-6 px-4 py-3.5 rounded-xl bg-emerald-50 border border-emerald-100
+         text-emerald-600 text-sm flex items-start gap-3;
+}
